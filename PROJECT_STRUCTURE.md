@@ -4,7 +4,7 @@
 > When a file or directory is added, removed, or its purpose changes, update the
 > matching row here in the same change. See [Maintenance rules](#maintenance-rules).
 
-**Last updated:** 2026-07-08 (added README.md + SETUP.md; Lombok 1.18.46 for JDK 25)
+**Last updated:** 2026-07-10 (built marketing landing page + product dashboard; added SiteHeader)
 
 ---
 
@@ -135,12 +135,12 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 | Path                     | Purpose                                                                    |
 |--------------------------|----------------------------------------------------------------------------|
 | `layout.tsx`             | Root layout; fonts, metadata, wraps the tree in `<AuthProvider>`.          |
-| `globals.css`            | Global styles / Tailwind entry.                                            |
+| `globals.css`            | Global styles / Tailwind entry; defines `brand` color tokens + smooth scroll. |
 | `favicon.ico`            | Site favicon.                                                              |
-| `page.tsx`               | Landing page `/`; CTA differs based on auth state.                         |
+| `page.tsx`               | Landing page `/` — marketing site: hero, 6-feature grid, how-it-works, AI-insights, CTA, footer. Auth-aware CTAs. |
 | `login/page.tsx`         | `/login` — sign-in form.                                                   |
 | `register/page.tsx`      | `/register` — account-creation form.                                       |
-| `dashboard/page.tsx`     | `/dashboard` — protected; shows the current user, wrapped in `ProtectedRoute`. |
+| `dashboard/page.tsx`     | `/dashboard` — protected product dashboard: KPI tiles, connections table, AI-insights panel (sample data). |
 
 ### `src/context/`
 
@@ -153,6 +153,7 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 | Path                    | Purpose                                                                     |
 |-------------------------|-----------------------------------------------------------------------------|
 | `ProtectedRoute.tsx`    | Client guard; redirects to `/login` when unauthenticated.                   |
+| `SiteHeader.tsx`        | Sticky marketing header with nav + auth-aware Login / Sign Up / Dashboard buttons. |
 
 ### `src/lib/`
 

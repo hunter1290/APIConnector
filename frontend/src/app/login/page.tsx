@@ -29,7 +29,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
+    <main className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
+      <Link href="/" className="text-lg font-semibold">
+        API<span className="text-brand">Connector</span>
+      </Link>
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm space-y-4 rounded-xl border border-black/10 p-8 dark:border-white/15"
@@ -67,7 +70,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-full bg-foreground py-2 text-background disabled:opacity-50"
+          className="w-full rounded-full bg-brand py-2 font-medium text-brand-fg transition-colors hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? "Signing in…" : "Sign in"}
         </button>
