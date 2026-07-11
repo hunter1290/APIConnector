@@ -8,15 +8,18 @@ import { useWorkspace } from "@/context/WorkspaceContext";
  * Offers to create one (the only option) — there is no default workspace.
  */
 export function NoWorkspace() {
-  const { addSet } = useWorkspace();
+  const { addSet, error } = useWorkspace();
   const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    addSet(trimmed);
-    setName("");
+    setSubmitting(true);
+    const ok = await addSet(trimmed);
+    setSubmitting(false);
+    if (ok) setName("");
   }
 
   return (
@@ -39,10 +42,15 @@ export function NoWorkspace() {
           placeholder="Workspace name (e.g. Client A)"
           className="flex-1 rounded-lg border border-black/15 bg-background px-3 py-2 text-sm dark:border-white/20"
         />
-        <button type="submit" className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90">
-          Add workspace
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+        >
+          {submitting ? "Adding…" : "Add workspace"}
         </button>
       </form>
+      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
     </div>
   );
 }

@@ -11,4 +11,10 @@ public interface TransformerRepository extends JpaRepository<Transformer, Long> 
     Optional<Transformer> findByApiDetailId(Long apiDetailId);
 
     List<Transformer> findByApiDetailIsNull();
+
+    Optional<Transformer> findByIdAndApiDetailUserId(Long id, Long userId);
+
+    List<Transformer> findByApiDetailUserIdOrderByCreatedAtAsc(Long userId);
+
+    void deleteByApiDetailId(Long apiDetailId);
 }

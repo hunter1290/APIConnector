@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { TokenMeter } from "@/components/dashboard/TokenMeter";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
 import { RESPONSE_MODE_LABELS, SECURITY_LABELS } from "@/types/connector";
 
 const INSIGHTS = [
@@ -15,8 +16,9 @@ const INSIGHTS = [
 
 export default function OverviewPage() {
   const { user } = useAuth();
-  const { activeSet } = useWorkspace();
+  const { activeSet, loading } = useWorkspace();
 
+  if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   const active = activeSet.apis.filter((a) => a.status === "ACTIVE").length;

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
 import { RESPONSE_MODE_LABELS, SECURITY_LABELS } from "@/types/connector";
 
 export default function ApisPage() {
-  const { activeSet, removeApi } = useWorkspace();
+  const { activeSet, removeApi, loading } = useWorkspace();
 
+  if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   return (

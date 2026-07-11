@@ -4,7 +4,7 @@
 > When a file or directory is added, removed, or its purpose changes, update the
 > matching row here in the same change. See [Maintenance rules](#maintenance-rules).
 
-**Last updated:** 2026-07-11 (added domain entities + Postgres tables; context/ and flow/ docs)
+**Last updated:** 2026-07-12 (frontend wired to backend: workspaces + APIs persist to Postgres via WorkspaceContext → REST)
 
 ---
 
@@ -91,19 +91,36 @@ Organized **package-by-feature** (`auth`, `user`) with cross-cutting concerns in
 
 | Path                     | Purpose                                                                           |
 |--------------------------|-----------------------------------------------------------------------------------|
-| `ApiDetail.java`         | JPA entity `api_details`: an upstream API a user registered (URL, format, auth). FK → user. |
+| `ApiDetail.java`         | JPA entity `api_details`: upstream API (URL, format, auth, `responseMode`, generated `uniformPath`). FK → user, workspace. |
 | `AuthType.java`          | Enum: NONE, API_KEY, BASIC, BEARER_TOKEN, OAUTH2, HMAC, JWT (security schemes).    |
 | `DataFormat.java`        | Enum: JSON, XML, CSV, SOAP, FORM_URLENCODED (payload formats).                     |
 | `HttpMethod.java`        | Enum of HTTP methods used to call the upstream.                                   |
+| `ResponseMode.java`      | Enum: DIRECT, WEBHOOK, AI_INSIGHT.                                                |
 | `ConnectionStatus.java`  | Enum: DRAFT, ACTIVE, INACTIVE, ERROR.                                             |
-| `ApiDetailRepository.java` | Repo: `findByUserId`.                                                            |
+| `ApiDetailRepository.java` | Repo: by user / workspace, `findByIdAndUserId`, `countByWorkspaceId`.           |
+| `ApiDetailService.java`  | CRUD scoped to user; resolves workspace, generates `uniformPath`, cascades transformer deletes. |
+| `ApiDetailController.java` | REST `/api/apis` (list/create/get/update/delete).                              |
+| `dto/ApiDetailRequest.java`, `dto/ApiDetailResponse.java` | Request/response DTOs (response omits `authConfig`). |
+
+#### `workspace/` — API groupings
+
+| Path                        | Purpose                                                                       |
+|-----------------------------|-------------------------------------------------------------------------------|
+| `Workspace.java`            | JPA entity `workspaces`: per-user grouping of APIs. FK → user.                |
+| `WorkspaceRepository.java`  | Repo: `findByUserId...`, `findByIdAndUserId`.                                 |
+| `WorkspaceService.java`     | CRUD scoped to user; delete cascades to APIs + their transformers.           |
+| `WorkspaceController.java`  | REST `/api/workspaces` (list/create/get/update/delete).                      |
+| `dto/WorkspaceRequest.java`, `dto/WorkspaceResponse.java` | Request/response DTOs (response includes `apiCount`). |
 
 #### `transformer/` — data normalization config
 
 | Path                        | Purpose                                                                       |
 |-----------------------------|-------------------------------------------------------------------------------|
 | `Transformer.java`          | JPA entity `transformers`: source→target format + JSON mapping `config` that normalizes an upstream into the uniform schema. FK → api_detail (nullable = global). |
-| `TransformerRepository.java`| Repo: `findByApiDetailId`, `findByApiDetailIsNull`.                            |
+| `TransformerRepository.java`| Repo: by api_detail / owning user, `deleteByApiDetailId`.                      |
+| `TransformerService.java`   | CRUD scoped to user (via their APIs).                                          |
+| `TransformerController.java`| REST `/api/transformers` (list/create/get/update/delete).                     |
+| `dto/TransformerRequest.java`, `dto/TransformerResponse.java` | Request/response DTOs.                     |
 
 #### `endpoint/` — published uniform URLs
 
@@ -131,6 +148,8 @@ Organized **package-by-feature** (`auth`, `user`) with cross-cutting concerns in
 | `GlobalExceptionHandler.java`   | `@RestControllerAdvice` mapping exceptions → consistent JSON + HTTP status.|
 | `ApiError.java`                 | Uniform error response body (timestamp, status, message, fieldErrors).     |
 | `EmailAlreadyExistsException.java` | Thrown on duplicate-email registration → HTTP 409.                      |
+| `ResourceNotFoundException.java` | Thrown when a resource is missing or not owned → HTTP 404.                |
+| `common/SlugUtil.java`          | Slugifies names for generated uniform paths.                              |
 
 ### `src/test/java/com/joveo/apiconnector/`
 
@@ -163,26 +182,45 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 
 | Path                     | Purpose                                                                    |
 |--------------------------|----------------------------------------------------------------------------|
-| `layout.tsx`             | Root layout; fonts, metadata, wraps the tree in `<AuthProvider>`.          |
+| `layout.tsx`             | Root layout; fonts, metadata, wraps the tree in `<AuthProvider>`. `<body>` has `suppressHydrationWarning`. |
 | `globals.css`            | Global styles / Tailwind entry; defines `brand` color tokens + smooth scroll. |
 | `favicon.ico`            | Site favicon.                                                              |
 | `page.tsx`               | Landing page `/` — marketing site: hero, 6-feature grid, how-it-works, AI-insights, CTA, footer. Auth-aware CTAs. |
 | `login/page.tsx`         | `/login` — sign-in form.                                                   |
 | `register/page.tsx`      | `/register` — account-creation form.                                       |
-| `dashboard/page.tsx`     | `/dashboard` — protected product dashboard: KPI tiles, connections table, AI-insights panel (sample data). |
+
+#### `src/app/dashboard/` — authenticated app (frontend-only, mock data)
+
+| Path                     | Purpose                                                                    |
+|--------------------------|----------------------------------------------------------------------------|
+| `dashboard/layout.tsx`   | App shell: `ProtectedRoute` + `AccountProvider` + `WorkspaceProvider` + Sidebar + Topbar. |
+| `dashboard/page.tsx`     | Overview (workspace-level): KPI tiles, token meter, recent connections, AI insights. Shows `NoWorkspace` if none. |
+| `dashboard/apis/page.tsx`| Third-party APIs in the active workspace (cards, remove, link to explorer). |
+| `dashboard/apis/new/page.tsx` | Add-API form: endpoint, **security scheme selection** + credential fields, **response mode** (Direct/Webhook/AI). |
+| `dashboard/explorer/page.tsx` | Swagger-style view of generated uniform URLs; "Try it" consumes tokens, shows sample response. |
+| `dashboard/analytics/page.tsx` | Analytics (workspace-level): pull/sync times, sync frequency, volume & downtime **charts**, uptime gauge. No add-API here. |
+| `dashboard/account/page.tsx`  | Account (user-level): profile, **free-token** overview, and **plan upgrade** (Regular ↔ Pro). |
 
 ### `src/context/`
 
-| Path                | Purpose                                                                         |
-|---------------------|---------------------------------------------------------------------------------|
-| `AuthContext.tsx`   | Client auth state: current user, `login`/`register`/`logout`, hydrates session from stored token. |
+| Path                   | Purpose                                                                      |
+|------------------------|------------------------------------------------------------------------------|
+| `AuthContext.tsx`      | Client auth state: current user, `login`/`register`/`logout`, hydrates session from stored token. |
+| `AccountContext.tsx`   | **User-level** store: subscription `plan` (Regular/Pro) + **free-token** balance, `upgradePlan`, `consumeTokens`. |
+| `WorkspaceContext.tsx` | **Workspace-level** store, **backed by the backend REST API** (persists to Postgres). Loads on mount; `addSet`/`deleteSet`/`addApi`/`removeApi` call `/api/workspaces` + `/api/apis`. Exposes `loading`/`error`. Only the active-workspace selection is in localStorage. |
 
 ### `src/components/`
 
-| Path                    | Purpose                                                                     |
-|-------------------------|-----------------------------------------------------------------------------|
-| `ProtectedRoute.tsx`    | Client guard; redirects to `/login` when unauthenticated.                   |
-| `SiteHeader.tsx`        | Sticky marketing header with nav + auth-aware Login / Sign Up / Dashboard buttons. |
+| Path                          | Purpose                                                               |
+|-------------------------------|-----------------------------------------------------------------------|
+| `ProtectedRoute.tsx`          | Client guard; redirects to `/login` when unauthenticated.             |
+| `SiteHeader.tsx`              | Sticky marketing header with nav + auth-aware Login / Sign Up / Dashboard buttons. |
+| `dashboard/Sidebar.tsx`       | App nav + workspace switcher with **add** + **delete workspace** + Account link. |
+| `dashboard/Topbar.tsx`        | Active workspace name, compact token meter, user + sign out.          |
+| `dashboard/TokenMeter.tsx`    | Free-token usage bar (full + compact); reads `AccountContext`.        |
+| `dashboard/NoWorkspace.tsx`   | Empty-state + create-workspace form shown on workspace-level pages when none exist. |
+| `dashboard/DashboardLoading.tsx` | Shared "Loading…" shown while workspace data is fetched.           |
+| `dashboard/Charts.tsx`        | Dependency-free BarChart / AreaChart / UptimeGauge (inline SVG/CSS).  |
 
 ### `src/lib/`
 
@@ -190,12 +228,15 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 |-----------------|-------------------------------------------------------------------------------------|
 | `api.ts`        | `fetch` wrapper: base URL, JSON handling, bearer-token attach, `ApiError`; token localStorage helpers. |
 | `authApi.ts`    | Auth API calls (`register`, `login`, `getCurrentUser`) built on `api.ts`.           |
+| `format.ts`     | Locale-independent `formatNumber` (avoids SSR hydration mismatches from `toLocaleString`). |
+| `connectorApi.ts` | Typed calls to `/api/workspaces` and `/api/apis` (used by `WorkspaceContext`). |
 
 ### `src/types/`
 
-| Path         | Purpose                                                                                |
-|--------------|----------------------------------------------------------------------------------------|
-| `auth.ts`    | TypeScript interfaces mirroring the backend auth DTOs.                                  |
+| Path            | Purpose                                                                             |
+|-----------------|-------------------------------------------------------------------------------------|
+| `auth.ts`       | TypeScript interfaces mirroring the backend auth DTOs.                               |
+| `connector.ts`  | Connector UI types (ThirdPartyApi, ApiSet, SecurityScheme, ResponseMode, UsageTokens) + labels. |
 
 ---
 
@@ -229,7 +270,8 @@ Full detail in [context/domain-model.md](context/domain-model.md).
 | Table               | Entity            | Purpose                                             |
 |---------------------|-------------------|-----------------------------------------------------|
 | `users`             | `user/User`       | Accounts. `role` (USER/ADMIN) + `plan` (REGULAR/PRO).|
-| `api_details`       | `api/ApiDetail`   | Registered upstream APIs (FK → users).              |
+| `workspaces`        | `workspace/Workspace` | Per-user grouping of APIs (FK → users).         |
+| `api_details`       | `api/ApiDetail`   | Registered upstream APIs (FK → users, workspaces). Has `response_mode` + generated `uniform_path`. |
 | `transformers`      | `transformer/Transformer` | Normalization config → uniform schema.      |
 | `unified_endpoints` | `endpoint/UnifiedEndpoint` | Uniform client-facing URL + cached data.   |
 
@@ -237,12 +279,21 @@ Full detail in [context/domain-model.md](context/domain-model.md).
 
 ## 5. API surface (current)
 
-| Method | Path                  | Auth      | Purpose                          |
-|--------|-----------------------|-----------|----------------------------------|
-| POST   | `/api/auth/register`  | Public    | Create account, returns JWT.     |
-| POST   | `/api/auth/login`     | Public    | Authenticate, returns JWT.       |
-| GET    | `/api/users/me`       | Bearer    | Current user's profile.          |
-| GET    | `/actuator/health`    | Public    | Liveness/readiness.              |
+| Method | Path                     | Auth   | Purpose                                    |
+|--------|--------------------------|--------|--------------------------------------------|
+| POST   | `/api/auth/register`     | Public | Create account, returns JWT.               |
+| POST   | `/api/auth/login`        | Public | Authenticate, returns JWT.                 |
+| GET    | `/api/users/me`          | Bearer | Current user's profile.                    |
+| GET/POST | `/api/workspaces`      | Bearer | List / create workspaces.                  |
+| GET/PUT/DELETE | `/api/workspaces/{id}` | Bearer | Get / update / delete a workspace (cascades to its APIs). |
+| GET/POST | `/api/apis`            | Bearer | List (optionally `?workspaceId=`) / create third-party APIs. |
+| GET/PUT/DELETE | `/api/apis/{id}` | Bearer | Get / update / delete an API.              |
+| GET/POST | `/api/transformers`   | Bearer | List / create transformer objects.         |
+| GET/PUT/DELETE | `/api/transformers/{id}` | Bearer | Get / update / delete a transformer. |
+| GET    | `/actuator/health`       | Public | Liveness/readiness.                        |
+
+All `Bearer` endpoints are scoped to the authenticated user; accessing another user's
+resource returns 404. `authConfig` (credentials) is stored but never returned in responses.
 
 ---
 

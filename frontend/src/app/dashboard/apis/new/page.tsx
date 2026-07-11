@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
 import {
   RESPONSE_MODE_LABELS,
   SECURITY_LABELS,
@@ -21,7 +22,7 @@ const RESPONSE_MODES: ResponseMode[] = ["DIRECT", "WEBHOOK", "AI_INSIGHT"];
 
 export default function NewApiPage() {
   const router = useRouter();
-  const { activeSet, addApi } = useWorkspace();
+  const { activeSet, addApi, loading } = useWorkspace();
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -29,20 +30,33 @@ export default function NewApiPage() {
   const [format, setFormat] = useState<DataFormat>("JSON");
   const [security, setSecurity] = useState<SecurityScheme>("API_KEY");
   const [responseMode, setResponseMode] = useState<ResponseMode>("DIRECT");
-  // Credential fields (captured in UI; persisted to backend later).
+  // Credential fields — sent to the backend as authConfig.
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   function setCred(key: string, value: string) {
     setCreds((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    addApi({ name, baseUrl, method, format, security, responseMode, status: "DRAFT" });
-    router.push("/dashboard/apis");
+    setSubmitting(true);
+    setError(null);
+    const config: Record<string, string> = { ...creds };
+    if (responseMode === "WEBHOOK" && webhookUrl) config.webhookUrl = webhookUrl;
+    const authConfig = Object.keys(config).length ? JSON.stringify(config) : null;
+    const ok = await addApi({ name, baseUrl, method, format, security, responseMode, status: "DRAFT", authConfig });
+    setSubmitting(false);
+    if (ok) {
+      router.push("/dashboard/apis");
+    } else {
+      setError("Could not save the API. Make sure the backend is running.");
+    }
   }
 
   return (
@@ -137,12 +151,22 @@ export default function NewApiPage() {
           )}
         </Card>
 
+        {error && (
+          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            {error}
+          </p>
+        )}
+
         <div className="flex justify-end gap-3">
           <Link href="/dashboard/apis" className="rounded-full border border-black/15 px-5 py-2 text-sm dark:border-white/20">
             Cancel
           </Link>
-          <button type="submit" className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-brand-fg hover:opacity-90">
-            Save API
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+          >
+            {submitting ? "Saving…" : "Save API"}
           </button>
         </div>
       </form>

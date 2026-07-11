@@ -5,7 +5,9 @@ Postgres schema, created by Hibernate from the JPA entities. All tables have
 
 ## Relationships
 ```
+users (1) ─────< (N) workspaces
 users (1) ─────< (N) api_details
+workspaces (1) ─< (N) api_details            (api_details.workspace_id nullable)
 users (1) ─────< (N) unified_endpoints
 api_details (1) ─< (N) transformers          (transformer.api_detail_id nullable → global transformer)
 api_details (1) ─< (N) unified_endpoints
@@ -23,21 +25,33 @@ transformers (1) ─< (N) unified_endpoints    (nullable)
 
 Entity: `user/User.java` (implements `UserDetails`). Enums: `Role`, `UserPlan`.
 
+## workspaces  — per-user grouping of APIs
+| Column      | Type       | Notes                    |
+|-------------|------------|--------------------------|
+| user_id     | FK → users | owner (many per user)    |
+| name        | varchar    |                          |
+| description | text       |                          |
+
+Entity: `workspace/Workspace.java`. API: `/api/workspaces`.
+
 ## api_details  — registered upstream APIs (owned by a user)
 | Column         | Type           | Notes                                  |
 |----------------|----------------|----------------------------------------|
 | user_id        | FK → users     | owner (many per user)                  |
+| workspace_id   | FK → workspaces, nullable | grouping                    |
 | name           | varchar        |                                        |
 | description    | text           |                                        |
 | base_url       | varchar(2048)  | upstream URL                           |
 | http_method    | enum           | GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS |
 | request_format | enum           | JSON/XML/CSV/SOAP/FORM_URLENCODED      |
 | auth_type      | enum           | NONE/API_KEY/BASIC/BEARER_TOKEN/OAUTH2/HMAC/JWT |
-| auth_config    | text (JSON)    | credentials/config (encrypt in prod)   |
+| auth_config    | text (JSON)    | credentials/config (encrypt in prod; never returned in API responses) |
 | headers        | text (JSON)    | default headers/query params           |
+| response_mode  | enum           | DIRECT/WEBHOOK/AI_INSIGHT              |
+| uniform_path   | varchar(512)   | generated `/v1/{workspace}/{api}`      |
 | status         | enum           | DRAFT/ACTIVE/INACTIVE/ERROR            |
 
-Entity: `api/ApiDetail.java`. Enums: `HttpMethod`, `DataFormat`, `AuthType`, `ConnectionStatus`.
+Entity: `api/ApiDetail.java`. Enums: `HttpMethod`, `DataFormat`, `AuthType`, `ResponseMode`, `ConnectionStatus`. API: `/api/apis`.
 
 ## transformers  — normalization config → uniform schema for all users
 | Column         | Type              | Notes                                       |

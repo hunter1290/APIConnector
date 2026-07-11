@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAccount } from "@/context/AccountContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
 import {
   RESPONSE_MODE_LABELS,
   SECURITY_LABELS,
@@ -23,8 +24,9 @@ const METHOD_COLORS: Record<string, string> = {
 };
 
 export default function ExplorerPage() {
-  const { activeSet } = useWorkspace();
+  const { activeSet, loading } = useWorkspace();
 
+  if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   return (

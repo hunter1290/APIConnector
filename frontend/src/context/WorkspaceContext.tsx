@@ -1,9 +1,9 @@
 "use client";
 
-// WORKSPACE-LEVEL state: the user's workspaces and the third-party APIs inside
-// each. Starts EMPTY (no default workspace) — the UI shows an empty state with
-// an "Add workspace" option. User-level concerns (plan, tokens) live in
-// AccountContext. Hydrates/persists via localStorage in effects (no SSR mismatch).
+// WORKSPACE-LEVEL state, now backed by the BACKEND (Postgres) instead of
+// localStorage. Loads workspaces + APIs on mount, and every mutation calls the
+// REST API so data actually persists. Only the "active workspace" selection is
+// kept in localStorage (a pure UI preference).
 
 import {
   createContext,
@@ -14,13 +14,35 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { ApiSet, ThirdPartyApi } from "@/types/connector";
+import {
+  type ApiDto,
+  createApiReq,
+  createWorkspace,
+  deleteApiReq,
+  deleteWorkspaceReq,
+  listApis,
+  listWorkspaces,
+} from "@/lib/connectorApi";
+import type {
+  ApiSet,
+  ConnectionStatus,
+  ResponseMode,
+  SecurityScheme,
+  ThirdPartyApi,
+} from "@/types/connector";
 
-const STORAGE_KEY = "apiconnector.workspaces.v2";
+const ACTIVE_KEY = "apiconnector.activeWorkspace";
 
-interface PersistedState {
-  sets: ApiSet[];
-  activeSetId: string | null;
+export interface AddApiInput {
+  name: string;
+  baseUrl: string;
+  method: ThirdPartyApi["method"];
+  format: ThirdPartyApi["format"];
+  security: SecurityScheme;
+  responseMode: ResponseMode;
+  status: ConnectionStatus;
+  authConfig?: string | null;
+  headers?: string | null;
 }
 
 interface WorkspaceContextValue {
@@ -28,113 +50,164 @@ interface WorkspaceContextValue {
   activeSet: ApiSet | undefined;
   activeSetId: string | null;
   hasWorkspaces: boolean;
+  loading: boolean;
+  error: string | null;
   setActiveSet: (id: string) => void;
-  addSet: (name: string, description?: string) => string;
-  deleteSet: (id: string) => void;
-  addApi: (api: Omit<ThirdPartyApi, "id" | "createdAt" | "uniformPath">) => void;
-  removeApi: (apiId: string) => void;
+  addSet: (name: string, description?: string) => Promise<boolean>;
+  deleteSet: (id: string) => Promise<void>;
+  addApi: (api: AddApiInput) => Promise<boolean>;
+  removeApi: (apiId: string) => Promise<void>;
+  reload: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
-function slugify(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "") || "item"
-  );
+/* ----------------------------- backend → UI ------------------------------ */
+
+function mapSecurity(authType: string): SecurityScheme {
+  return authType === "JWT" ? "BEARER_TOKEN" : (authType as SecurityScheme);
 }
 
-function newId(prefix: string): string {
-  const rand =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID().slice(0, 8)
-      : Math.random().toString(36).slice(2, 10);
-  return `${prefix}-${rand}`;
+function mapStatus(status: string): ConnectionStatus {
+  return status === "INACTIVE" ? "DRAFT" : (status as ConnectionStatus);
 }
+
+function toThirdPartyApi(a: ApiDto): ThirdPartyApi {
+  return {
+    id: String(a.id),
+    name: a.name,
+    baseUrl: a.baseUrl,
+    method: a.httpMethod as ThirdPartyApi["method"],
+    format: a.requestFormat as ThirdPartyApi["format"],
+    security: mapSecurity(a.authType),
+    responseMode: a.responseMode as ResponseMode,
+    status: mapStatus(a.status),
+    uniformPath: a.uniformPath ?? "",
+    createdAt: a.createdAt,
+  };
+}
+
+/* -------------------------------- provider -------------------------------- */
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [sets, setSets] = useState<ApiSet[]>([]);
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Hydrate after mount (first render stays empty/deterministic).
-  useEffect(() => {
+  const reload = useCallback(async () => {
+    setLoading(true);
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as PersistedState;
-      if (parsed.sets) {
-        setSets(parsed.sets);
-        const valid = parsed.sets.some((s) => s.id === parsed.activeSetId);
-        setActiveSetId(valid ? parsed.activeSetId : parsed.sets[0]?.id ?? null);
-      }
+      const [workspaces, apis] = await Promise.all([listWorkspaces(), listApis()]);
+      const mapped: ApiSet[] = workspaces.map((w) => ({
+        id: String(w.id),
+        name: w.name,
+        description: w.description ?? undefined,
+        apis: apis.filter((a) => a.workspaceId === w.id).map(toThirdPartyApi),
+      }));
+      setSets(mapped);
+      setError(null);
+      setActiveSetId((prev) => {
+        const stored = typeof window !== "undefined" ? window.localStorage.getItem(ACTIVE_KEY) : null;
+        if (prev && mapped.some((s) => s.id === prev)) return prev;
+        if (stored && mapped.some((s) => s.id === stored)) return stored;
+        return mapped[0]?.id ?? null;
+      });
     } catch {
-      /* ignore corrupt storage */
+      setError("Could not load workspaces. Is the backend running?");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ sets, activeSetId }));
-    } catch {
-      /* ignore quota errors */
-    }
-  }, [sets, activeSetId]);
+    reload();
+  }, [reload]);
+
+  useEffect(() => {
+    if (activeSetId) window.localStorage.setItem(ACTIVE_KEY, activeSetId);
+  }, [activeSetId]);
 
   const setActiveSet = useCallback((id: string) => setActiveSetId(id), []);
 
-  const addSet = useCallback((name: string, description?: string) => {
-    const id = newId("ws");
-    setSets((prev) => [...prev, { id, name, description, apis: [] }]);
-    setActiveSetId(id);
-    return id;
+  const addSet = useCallback(async (name: string, description?: string) => {
+    try {
+      const w = await createWorkspace({ name, description });
+      setSets((prev) => [
+        ...prev,
+        { id: String(w.id), name: w.name, description: w.description ?? undefined, apis: [] },
+      ]);
+      setActiveSetId(String(w.id));
+      setError(null);
+      return true;
+    } catch {
+      setError("Could not create workspace. Is the backend running?");
+      return false;
+    }
   }, []);
 
-  const deleteSet = useCallback((id: string) => {
-    setSets((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      setActiveSetId((current) => (current === id ? next[0]?.id ?? null : current));
-      return next;
-    });
+  const deleteSet = useCallback(async (id: string) => {
+    try {
+      await deleteWorkspaceReq(Number(id));
+      setSets((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        setActiveSetId((cur) => (cur === id ? next[0]?.id ?? null : cur));
+        return next;
+      });
+      setError(null);
+    } catch {
+      setError("Could not delete workspace.");
+    }
   }, []);
 
   const addApi = useCallback(
-    (api: Omit<ThirdPartyApi, "id" | "createdAt" | "uniformPath">) => {
-      setSets((prev) =>
-        prev.map((set) => {
-          if (set.id !== activeSetId) return set;
-          const full: ThirdPartyApi = {
-            ...api,
-            id: newId("api"),
-            createdAt: new Date().toISOString(),
-            uniformPath: `/v1/${slugify(set.name)}/${slugify(api.name)}`,
-          };
-          return { ...set, apis: [...set.apis, full] };
-        }),
-      );
+    async (input: AddApiInput) => {
+      if (!activeSetId) return false;
+      try {
+        const dto = await createApiReq({
+          workspaceId: Number(activeSetId),
+          name: input.name,
+          baseUrl: input.baseUrl,
+          httpMethod: input.method,
+          requestFormat: input.format,
+          authType: input.security,
+          authConfig: input.authConfig ?? null,
+          headers: input.headers ?? null,
+          responseMode: input.responseMode,
+          status: input.status,
+        });
+        setSets((prev) =>
+          prev.map((s) =>
+            s.id === activeSetId ? { ...s, apis: [...s.apis, toThirdPartyApi(dto)] } : s,
+          ),
+        );
+        setError(null);
+        return true;
+      } catch {
+        setError("Could not save API. Is the backend running?");
+        return false;
+      }
     },
     [activeSetId],
   );
 
   const removeApi = useCallback(
-    (apiId: string) => {
-      setSets((prev) =>
-        prev.map((set) =>
-          set.id === activeSetId
-            ? { ...set, apis: set.apis.filter((a) => a.id !== apiId) }
-            : set,
-        ),
-      );
+    async (apiId: string) => {
+      try {
+        await deleteApiReq(Number(apiId));
+        setSets((prev) =>
+          prev.map((s) =>
+            s.id === activeSetId ? { ...s, apis: s.apis.filter((a) => a.id !== apiId) } : s,
+          ),
+        );
+      } catch {
+        setError("Could not remove API.");
+      }
     },
     [activeSetId],
   );
 
-  const activeSet = useMemo(
-    () => sets.find((s) => s.id === activeSetId),
-    [sets, activeSetId],
-  );
+  const activeSet = useMemo(() => sets.find((s) => s.id === activeSetId), [sets, activeSetId]);
 
   const value = useMemo<WorkspaceContextValue>(
     () => ({
@@ -142,13 +215,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activeSet,
       activeSetId,
       hasWorkspaces: sets.length > 0,
+      loading,
+      error,
       setActiveSet,
       addSet,
       deleteSet,
       addApi,
       removeApi,
+      reload,
     }),
-    [sets, activeSet, activeSetId, setActiveSet, addSet, deleteSet, addApi, removeApi],
+    [sets, activeSet, activeSetId, loading, error, setActiveSet, addSet, deleteSet, addApi, removeApi, reload],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

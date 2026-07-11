@@ -46,5 +46,8 @@ Client ◄┤ response │◄─────────────────
 - **Efficiency / AI** — synced payloads + logs feed anomaly detection and efficiency scoring.
 
 ## Current vs. planned
-- **Built:** entities/tables, auth, uniform-endpoint model, cached payload fields.
-- **Planned:** the executor that performs steps 2–6, plus observability + AI insight tables.
+- **Built:** entities/tables, auth, **CRUD APIs** for workspaces / api_details / transformers
+  (user-scoped, JWT-protected — `/api/workspaces`, `/api/apis`, `/api/transformers`),
+  uniform-endpoint model, cached payload fields. `uniform_path` is generated on API create.
+- **Planned:** the executor that performs steps 2–6 (resolve → translate → call → normalize →
+  cache → observe), wiring the frontend to these CRUD APIs, plus observability + AI insight tables.

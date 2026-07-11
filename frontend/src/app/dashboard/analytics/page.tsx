@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
+import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
 import { AreaChart, BarChart, UptimeGauge } from "@/components/dashboard/Charts";
 import { formatNumber } from "@/lib/format";
 import type { ThirdPartyApi } from "@/types/connector";
@@ -70,7 +71,7 @@ function sumArrays(arrs: number[][]): number[] {
 /* --------------------------------- page ---------------------------------- */
 
 export default function AnalyticsPage() {
-  const { activeSet } = useWorkspace();
+  const { activeSet, loading } = useWorkspace();
   const [filter, setFilter] = useState<string>("ALL");
 
   const apis = activeSet?.apis ?? [];
@@ -94,6 +95,7 @@ export default function AnalyticsPage() {
     return { syncs, volume, uptimePct, totalVolume, totalSyncs, downtime, lastSyncedMin, lastPulledMin, frequency };
   }, [selectedApis]);
 
+  if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   return (

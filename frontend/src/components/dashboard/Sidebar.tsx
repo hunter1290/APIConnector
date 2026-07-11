@@ -31,17 +31,19 @@ const NAV: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sets, activeSet, activeSetId, setActiveSet, addSet, deleteSet } = useWorkspace();
+  const { sets, activeSet, activeSetId, setActiveSet, addSet, deleteSet, error } = useWorkspace();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
 
-  function handleAddSet(e: FormEvent) {
+  async function handleAddSet(e: FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    addSet(trimmed);
-    setName("");
-    setAdding(false);
+    const ok = await addSet(trimmed);
+    if (ok) {
+      setName("");
+      setAdding(false);
+    }
   }
 
   function handleDelete() {
@@ -116,6 +118,7 @@ export function Sidebar() {
             + New workspace
           </button>
         )}
+        {error && <p className="mt-2 px-2 text-xs text-red-500">{error}</p>}
       </div>
 
       {/* nav */}

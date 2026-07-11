@@ -1,6 +1,7 @@
 package com.joveo.apiconnector.api;
 
 import com.joveo.apiconnector.user.User;
+import com.joveo.apiconnector.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,7 +29,8 @@ import lombok.Setter;
  */
 @Entity
 @Table(name = "api_details", indexes = {
-        @Index(name = "idx_api_details_user", columnList = "user_id")
+        @Index(name = "idx_api_details_user", columnList = "user_id"),
+        @Index(name = "idx_api_details_workspace", columnList = "workspace_id")
 })
 @Getter
 @Setter
@@ -46,6 +48,12 @@ public class ApiDetail {
     @JoinColumn(name = "user_id", nullable = false,
             foreignKey = @ForeignKey(name = "fk_api_details_user"))
     private User user;
+
+    /** Workspace this API belongs to (grouping). */
+    @ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @JoinColumn(name = "workspace_id",
+            foreignKey = @ForeignKey(name = "fk_api_details_workspace"))
+    private Workspace workspace;
 
     @Column(nullable = false)
     private String name;
@@ -84,6 +92,16 @@ public class ApiDetail {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private ConnectionStatus status = ConnectionStatus.DRAFT;
+
+    /** How the uniform endpoint returns data to the client. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "response_mode", nullable = false, length = 20)
+    @Builder.Default
+    private ResponseMode responseMode = ResponseMode.DIRECT;
+
+    /** Generated uniform, client-facing path (e.g. /v1/{workspace}/{api}). */
+    @Column(name = "uniform_path", length = 512)
+    private String uniformPath;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

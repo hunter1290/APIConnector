@@ -7,7 +7,7 @@
 | Build     | Maven (wrapper `./mvnw`). Deps resolve via Joveo Artifactory (**VPN required**). |
 | DB        | PostgreSQL 16 (Docker: `backend/docker-compose.yml`). Schema via Hibernate `ddl-auto=update`. |
 | Auth      | JWT bearer (stateless), BCrypt hashing. Secret + expiry in `app.security.jwt.*`. |
-| Frontend  | Next.js 16 (App Router), React 19, TypeScript, Tailwind v4. Token in localStorage. |
+| Frontend  | Next.js 16 (App Router), React 19, TypeScript, Tailwind v4. Token in localStorage. Dashboard `/dashboard/*` is **frontend-only/mock**: `AccountContext` (user-level: plan + free tokens) + `WorkspaceContext` (workspace-level: workspaces + APIs), pending backend. |
 | Lombok    | Pinned `1.18.46` (JDK 25 compatibility).                          |
 
 ## Backend package layout (`com.joveo.apiconnector`)
