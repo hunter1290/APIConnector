@@ -53,6 +53,7 @@ export default function RegisterPage() {
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+            suppressHydrationWarning
             className="mt-1 w-full rounded-md border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-black"
           />
         </label>
@@ -64,6 +65,7 @@ export default function RegisterPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            suppressHydrationWarning
             className="mt-1 w-full rounded-md border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-black"
           />
         </label>
@@ -76,6 +78,7 @@ export default function RegisterPage() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            suppressHydrationWarning
             className="mt-1 w-full rounded-md border border-black/15 px-3 py-2 dark:border-white/20 dark:bg-black"
           />
         </label>
