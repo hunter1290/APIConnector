@@ -4,7 +4,7 @@
 > When a file or directory is added, removed, or its purpose changes, update the
 > matching row here in the same change. See [Maintenance rules](#maintenance-rules).
 
-**Last updated:** 2026-07-10 (built marketing landing page + product dashboard; added SiteHeader)
+**Last updated:** 2026-07-11 (added domain entities + Postgres tables; context/ and flow/ docs)
 
 ---
 
@@ -31,6 +31,8 @@ The two roots are **independent projects** (separate build tooling, separate dep
 |------------------------|-------------------------------------------------------------------|
 | `backend/`             | Spring Boot REST API. See [§3](#3-backend-backend).                |
 | `frontend/`            | Next.js web application. See [§4](#4-frontend-frontend).           |
+| `context/`             | Terse, token-efficient reference for AI models (tech stack, domain model, glossary). |
+| `flow/`                | How the system works — application, data, and auth flows.         |
 | `README.md`            | Project overview and quick start (frontend + backend).            |
 | `SETUP.md`             | Step-by-step local setup instructions.                            |
 | `PROJECT_STRUCTURE.md` | This living document.                                             |
@@ -79,10 +81,37 @@ Organized **package-by-feature** (`auth`, `user`) with cross-cutting concerns in
 
 | Path                     | Purpose                                                                           |
 |--------------------------|-----------------------------------------------------------------------------------|
-| `User.java`              | JPA entity for `users` table; also implements Spring `UserDetails` (principal).   |
+| `User.java`              | JPA entity for `users` table; also implements Spring `UserDetails` (principal). Has `role` + `plan`. |
 | `Role.java`              | Enum of authorization roles: `USER`, `ADMIN`.                                     |
+| `UserPlan.java`          | Enum of normal-user tiers: `REGULAR`, `PRO` (null for admins).                    |
 | `UserRepository.java`    | Spring Data JPA repo: `findByEmail`, `existsByEmail`.                             |
 | `UserController.java`    | `GET /api/users/me` — returns the authenticated caller's profile (protected).     |
+
+#### `api/` — registered upstream APIs
+
+| Path                     | Purpose                                                                           |
+|--------------------------|-----------------------------------------------------------------------------------|
+| `ApiDetail.java`         | JPA entity `api_details`: an upstream API a user registered (URL, format, auth). FK → user. |
+| `AuthType.java`          | Enum: NONE, API_KEY, BASIC, BEARER_TOKEN, OAUTH2, HMAC, JWT (security schemes).    |
+| `DataFormat.java`        | Enum: JSON, XML, CSV, SOAP, FORM_URLENCODED (payload formats).                     |
+| `HttpMethod.java`        | Enum of HTTP methods used to call the upstream.                                   |
+| `ConnectionStatus.java`  | Enum: DRAFT, ACTIVE, INACTIVE, ERROR.                                             |
+| `ApiDetailRepository.java` | Repo: `findByUserId`.                                                            |
+
+#### `transformer/` — data normalization config
+
+| Path                        | Purpose                                                                       |
+|-----------------------------|-------------------------------------------------------------------------------|
+| `Transformer.java`          | JPA entity `transformers`: source→target format + JSON mapping `config` that normalizes an upstream into the uniform schema. FK → api_detail (nullable = global). |
+| `TransformerRepository.java`| Repo: `findByApiDetailId`, `findByApiDetailIsNull`.                            |
+
+#### `endpoint/` — published uniform URLs
+
+| Path                            | Purpose                                                                    |
+|---------------------------------|----------------------------------------------------------------------------|
+| `UnifiedEndpoint.java`          | JPA entity `unified_endpoints`: the stable client-facing `url_path`, its links (user, api_detail, transformer), and the last-synced `cached_payload`. |
+| `EndpointStatus.java`           | Enum: DRAFT, ACTIVE, INACTIVE, ERROR.                                      |
+| `UnifiedEndpointRepository.java`| Repo: `findByUserId`, `findByUrlPath`.                                     |
 
 #### `security/` — Spring Security + JWT wiring
 
@@ -167,6 +196,42 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 | Path         | Purpose                                                                                |
 |--------------|----------------------------------------------------------------------------------------|
 | `auth.ts`    | TypeScript interfaces mirroring the backend auth DTOs.                                  |
+
+---
+
+## 4a. Docs directories (`context/`, `flow/`)
+
+`context/` — dense reference optimized so AI assistants can load it instead of reading source (saves tokens):
+
+| Path                       | Purpose                                                          |
+|----------------------------|------------------------------------------------------------------|
+| `context/README.md`        | What the folder is and how to maintain it.                       |
+| `context/tech-stack.md`    | Stack, versions, package layout, conventions, gotchas.           |
+| `context/domain-model.md`  | The DB schema: tables, columns, enums, relationships.            |
+| `context/glossary.md`      | Product terms.                                                   |
+
+`flow/` — narrative of how the system works:
+
+| Path                        | Purpose                                                         |
+|-----------------------------|-----------------------------------------------------------------|
+| `flow/README.md`            | What the folder is.                                             |
+| `flow/application-flow.md`  | User journeys; how features map to the model.                  |
+| `flow/data-flow.md`         | The core request pipeline (client → uniform URL → upstream).   |
+| `flow/auth-flow.md`         | Register / login / protected-request JWT flow.                 |
+
+---
+
+## 4b. Database schema
+
+Four tables, created by Hibernate from the JPA entities (`ddl-auto=update`).
+Full detail in [context/domain-model.md](context/domain-model.md).
+
+| Table               | Entity            | Purpose                                             |
+|---------------------|-------------------|-----------------------------------------------------|
+| `users`             | `user/User`       | Accounts. `role` (USER/ADMIN) + `plan` (REGULAR/PRO).|
+| `api_details`       | `api/ApiDetail`   | Registered upstream APIs (FK → users).              |
+| `transformers`      | `transformer/Transformer` | Normalization config → uniform schema.      |
+| `unified_endpoints` | `endpoint/UnifiedEndpoint` | Uniform client-facing URL + cached data.   |
 
 ---
 

@@ -55,6 +55,11 @@ public class User implements UserDetails {
     @Builder.Default
     private Role role = Role.USER;
 
+    /** Subscription tier for normal users (REGULAR/PRO). Null for ADMIN accounts. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private UserPlan plan;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

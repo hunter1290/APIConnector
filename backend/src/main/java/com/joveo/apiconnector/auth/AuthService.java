@@ -8,6 +8,7 @@ import com.joveo.apiconnector.security.JwtProperties;
 import com.joveo.apiconnector.security.JwtService;
 import com.joveo.apiconnector.user.Role;
 import com.joveo.apiconnector.user.User;
+import com.joveo.apiconnector.user.UserPlan;
 import com.joveo.apiconnector.user.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -47,6 +48,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.password()))
                 .fullName(request.fullName())
                 .role(Role.USER)
+                .plan(UserPlan.REGULAR)
                 .build();
         userRepository.save(user);
         return buildResponse(user);

@@ -1,0 +1,46 @@
+# Auth Flow (JWT)
+
+Stateless JWT auth. The frontend stores the token in `localStorage` and sends it as
+`Authorization: Bearer <token>` on API calls.
+
+## Register
+```
+POST /api/auth/register {email, password, fullName}
+  → AuthService.register
+      • reject if email exists (409 EmailAlreadyExistsException)
+      • hash password (BCrypt)
+      • save users row (role=USER, plan=REGULAR)
+      • issue JWT
+  → 201 { token, tokenType, expiresInMs, user }
+```
+
+## Login
+```
+POST /api/auth/login {email, password}
+  → AuthService.login
+      • AuthenticationManager.authenticate(...)   (bad creds → 401)
+      • load user, issue JWT
+  → 200 { token, tokenType, expiresInMs, user }
+```
+
+## Protected request
+```
+GET /api/users/me   Authorization: Bearer <token>
+  → JwtAuthenticationFilter
+      • extract + verify token (signature, expiry) via JwtService
+      • load user via CustomUserDetailsService (by email)
+      • set SecurityContext authentication
+  → controller runs with @AuthenticationPrincipal User
+```
+
+## Key components (backend `security/`)
+| Component                  | Role                                                       |
+|----------------------------|------------------------------------------------------------|
+| `SecurityConfig`           | Stateless chain, CORS, public vs. protected routes.        |
+| `JwtService`               | Generate/verify HMAC-signed JWTs.                          |
+| `JwtAuthenticationFilter`  | Per-request bearer-token authentication.                   |
+| `CustomUserDetailsService` | Load `User` by email.                                     |
+
+## Public vs. protected
+- **Public:** `/api/auth/**`, `/actuator/health`, `/actuator/info`.
+- **Protected:** everything else (valid JWT required).
