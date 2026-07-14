@@ -1,0 +1,74 @@
+name: Backend CI
+
+# Runs the Spring Boot backend tests on every push / PR that touches it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test (JDK 17)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    # Postgres matching backend/docker-compose.yml so the @SpringBootTest
+    # context-load smoke test can start against a real database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: apiconnector
+          POSTGRES_USER: apiconnector
+          POSTGRES_PASSWORD: apiconnector
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U apiconnector"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Temurin 17 + built-in Maven dependency caching (~/.m2).
+      # No custom settings.xml: dependencies resolve from Maven Central, so the
+      # Joveo Artifactory / VPN is NOT required on the runner.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw -B --no-transfer-progress test
+        env:
+          # Point Spring at the Postgres service (defaults in application.properties
+          # already match, listed here explicitly for clarity / overridability).
+          DB_URL: jdbc:postgresql://localhost:5432/apiconnector
+          DB_USERNAME: apiconnector
+          DB_PASSWORD: apiconnector
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: ignore

@@ -31,6 +31,7 @@ The two roots are **independent projects** (separate build tooling, separate dep
 |------------------------|-------------------------------------------------------------------|
 | `backend/`             | Spring Boot REST API. See [§3](#3-backend-backend).                |
 | `frontend/`            | Next.js web application. See [§4](#4-frontend-frontend).           |
+| `.github/workflows/`   | GitHub Actions CI. `backend-ci.yml` builds + runs backend tests (JDK 17, Postgres 16 service) on pushes/PRs touching `backend/`. |
 | `context/`             | Terse, token-efficient reference for AI models (tech stack, domain model, glossary). |
 | `flow/`                | How the system works — application, data, and auth flows.         |
 | `README.md`            | Project overview and quick start (frontend + backend).            |
@@ -155,7 +156,10 @@ Organized **package-by-feature** (`auth`, `user`) with cross-cutting concerns in
 
 | Path                              | Purpose                                                                  |
 |-----------------------------------|--------------------------------------------------------------------------|
-| `ApiconnectorApplicationTests.java` | Default context-load smoke test. **Note:** needs a running Postgres (or a test profile) to pass. |
+| `ApiconnectorApplicationTests.java` | Default context-load smoke test. **Note:** needs a running Postgres (provided by the CI Postgres service, or local docker-compose) to pass. |
+| `auth/AuthServiceTest.java`       | Unit tests for `AuthService` (register/login) with all collaborators mocked (Mockito). No Spring context, no DB. |
+| `security/JwtServiceTest.java`    | Unit tests for `JwtService`: token generation, username extraction, validity, expiry, signature checks. No Spring context, no DB. |
+| `common/SlugUtilTest.java`        | Parameterized unit tests for `SlugUtil.slugify`. No Spring context, no DB. |
 
 ---
 
