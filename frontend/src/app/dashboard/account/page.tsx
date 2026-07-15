@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useAccount, PLAN_LABELS, PLAN_TOKENS, type Plan } from "@/context/AccountContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { TokenMeter } from "@/components/dashboard/TokenMeter";
 import { formatNumber } from "@/lib/format";
+import { getMyPlanRequest, requestPlanUpgrade, type PlanUpgradeRequestDto } from "@/lib/connectorApi";
 
 const PLAN_FEATURES: Record<Plan, string[]> = {
   REGULAR: [
@@ -27,6 +29,32 @@ export default function AccountPage() {
   const { plan, tokens, tokensRemaining } = useAccount();
   const { sets } = useWorkspace();
   const isAdmin = user?.role === "ADMIN";
+
+  const [planRequest, setPlanRequest] = useState<PlanUpgradeRequestDto | undefined>(undefined);
+  const [requesting, setRequesting] = useState(false);
+
+  const loadPlanRequest = useCallback(() => {
+    if (isAdmin) return;
+    getMyPlanRequest().then(setPlanRequest).catch(() => setPlanRequest(undefined));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    loadPlanRequest();
+  }, [loadPlanRequest]);
+
+  async function handleRequestPro() {
+    setRequesting(true);
+    try {
+      const created = await requestPlanUpgrade();
+      setPlanRequest(created);
+    } catch {
+      // Swallow — the button just stays available to retry.
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  const hasPendingRequest = planRequest?.status === "PENDING";
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -75,6 +103,23 @@ export default function AccountPage() {
         <section className="space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Plan</h2>
           <p className="text-xs text-zinc-500">Only an admin can change your plan.</p>
+          {plan === "REGULAR" && (
+            <div>
+              {hasPendingRequest ? (
+                <span className="inline-block rounded-full bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Pending admin approval
+                </span>
+              ) : (
+                <button
+                  onClick={handleRequestPro}
+                  disabled={requesting}
+                  className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+                >
+                  {requesting ? "Requesting…" : "Request Pro upgrade"}
+                </button>
+              )}
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             {(["REGULAR", "PRO"] as Plan[]).map((p) => {
               const current = plan === p;

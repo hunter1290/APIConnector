@@ -18,10 +18,14 @@ POST /api/auth/register {email, password, fullName}
 ```
 POST /api/auth/login {email, password}
   → AuthService.login
-      • AuthenticationManager.authenticate(...)   (bad creds → 401)
+      • AuthenticationManager.authenticate(...)   (bad creds → 401; disabled account → 403)
       • load user, issue JWT
   → 200 { token, tokenType, expiresInMs, user }
 ```
+A disabled account (admin-set `users.enabled = false`, see `admin-monitoring.md`) can't log
+in — `DaoAuthenticationProvider` throws `DisabledException`, mapped to **403** "This account
+has been disabled." An already-issued JWT from *before* being disabled still works until it
+expires — this only blocks new logins, it doesn't revoke a live session.
 
 ## Protected request
 ```

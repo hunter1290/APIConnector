@@ -9,6 +9,7 @@ reference (what things *are*), this folder explains *how they function and are u
 | `application-flow.md` | End-to-end user journeys and how the pieces fit together.         |
 | `data-flow.md`        | The core request pipeline: client → uniform URL → upstreams → client. |
 | `auth-flow.md`        | Registration, login, and JWT-protected request handling.          |
-| `admin-monitoring.md` | AI-token usage tracking + the ADMIN monitoring API.               |
+| `admin-monitoring.md` | AI-token usage tracking, account enable/disable, and the Request-Pro workflow. |
+| `ai-analysis-flow.md` | Bring-your-own-key AI providers + the `AI_analysis` microservice.  |
 
 > Keep these updated when behavior changes. Diagrams are ASCII so they diff cleanly.

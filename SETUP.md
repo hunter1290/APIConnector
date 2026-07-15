@@ -104,9 +104,50 @@ overridable via environment variables:
 
 ---
 
-## 4. Run the frontend (UI → http://localhost:3000)
+## 4. Run the AI_analysis service (optional → http://localhost:4000)
 
-In a second terminal:
+`AI_analysis/` is a stateless Node.js microservice the backend calls to run real AI analysis
+(Anthropic/OpenAI). **APIConnector supplies the credentials — not the user** — so they live
+only in this service's own `.env` file, and using AI analysis is a **Pro-plan-only** feature
+in the app. AI_analysis has no database. The backend degrades gracefully without it (analysis
+is just unavailable — nothing else breaks), but if you start it, the shared secret **must
+match** on both sides.
+
+```bash
+cd AI_analysis
+npm install
+cp .env.example .env
+# Edit .env: set ANTHROPIC_API_KEY and/or OPENAI_API_KEY to get real insights (optional —
+# without a key, that provider's /analyze calls just return a clear "not configured" error).
+npm run dev
+```
+
+**Verify it's up:**
+
+```bash
+curl http://localhost:4000/health
+# -> {"status":"UP"}
+```
+
+`.env`'s `INTERNAL_SHARED_SECRET` default matches the backend's own default
+(`app.ai.analysis.shared-secret` / `AI_ANALYSIS_SHARED_SECRET`) — override both consistently
+in every real environment. Never commit the real `.env` (already gitignored) or a real key.
+
+### AI_analysis configuration (`AI_analysis/.env`, see `.env.example`)
+
+| Variable                  | Default                              | Purpose                                |
+|----------------------------|--------------------------------------|-----------------------------------------|
+| `PORT`                    | `4000`                                | HTTP port.                              |
+| `INTERNAL_SHARED_SECRET`  | `dev-only-shared-secret-change-me`   | Must match the backend's `app.ai.analysis.shared-secret`. **Override in production.** |
+| `REQUEST_TIMEOUT_MS`      | `20000`                               | Timeout for the outbound Anthropic/OpenAI call. |
+| `ANTHROPIC_API_KEY`       | *(none)*                              | Real Anthropic key. Only Pro accounts can trigger calls that use it. |
+| `OPENAI_API_KEY`          | *(none)*                              | Real OpenAI key. Only Pro accounts can trigger calls that use it.    |
+
+---
+
+## 5. Run the frontend (UI → http://localhost:3000)
+
+In another terminal:
 
 ```bash
 cd frontend
@@ -121,20 +162,22 @@ The frontend reads `NEXT_PUBLIC_API_BASE_URL` from `frontend/.env.local`
 
 ---
 
-## 5. Useful commands
+## 6. Useful commands
 
 | Command (run in the project folder)      | What it does                              |
 |------------------------------------------|-------------------------------------------|
 | `./mvnw -DskipTests clean compile`       | Compile the backend.                      |
 | `./mvnw spring-boot:run`                 | Run the backend.                          |
 | `./mvnw clean package`                   | Build an executable jar (`target/*.jar`). |
-| `npm run dev`                            | Run the frontend in dev mode.             |
+| `./mvnw test`                            | Run backend unit + smoke tests.           |
+| `npm run dev` (frontend or AI_analysis)  | Run in dev mode.                          |
 | `npm run build && npm start`             | Production build + serve the frontend.    |
 | `npm run lint`                           | Lint the frontend.                        |
+| `npm run typecheck` (AI_analysis)        | Type-check the AI_analysis service.       |
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 | Symptom                                                        | Cause / Fix                                                                 |
 |----------------------------------------------------------------|-----------------------------------------------------------------------------|
@@ -144,6 +187,10 @@ The frontend reads `NEXT_PUBLIC_API_BASE_URL` from `frontend/.env.local`
 | Backend fails to start with a DB connection error              | Postgres isn't running. `cd backend && docker compose up -d`.               |
 | Login returns 401                                              | Wrong credentials, or the user isn't registered yet.                        |
 | CORS error in the browser console                              | Frontend origin not in `CORS_ALLOWED_ORIGINS`. Add it and restart backend.  |
+| `Mockito cannot mock this class` / `Could not modify all classes` | Pre-JDK-25-fix symptom. Already fixed via `pom.xml`'s pinned `mockito.version` (5.20.0) + Surefire `argLine=-Dnet.bytebuddy.experimental=true`. If you still see it, confirm both are present. |
+| AI analysis always returns `insights: null`                    | Either `AI_analysis` isn't running, the shared secret doesn't match (`app.ai.analysis.shared-secret` vs. `INTERNAL_SHARED_SECRET`), or `AI_analysis/.env` has no `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` set — check the AI_analysis process logs for the real provider error. |
+| `400 AI analysis is available on the Pro plan only`            | Expected — using an AI provider (attaching one, or `/api/ai-providers/{provider}/analyze`) is Pro-gated server-side. Upgrade the account's plan (admin: `PATCH /api/admin/accounts/{id}/plan`) to test it. |
+| Live-test call fails with "Refusing to call a private/internal network address" | `SsrfGuard` blocking a loopback/private host by design. Set `ALLOW_PRIVATE_NETWORK_HOSTS=true` only in trusted local/dev setups that need it. |
 
 ### IDE (IntelliJ / VS Code)
 

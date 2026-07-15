@@ -28,6 +28,8 @@ export interface ApiDto {
   responseMode: string;
   status: string;
   uniformPath: string | null;
+  /** Platform AI provider ("ANTHROPIC"/"OPENAI") attached for AI_INSIGHT analysis. Pro plan only. */
+  aiProvider: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +45,7 @@ export interface CreateApiBody {
   headers?: string | null;
   responseMode: string;
   status?: string;
+  aiProvider?: string | null;
 }
 
 /* ------------------------------- workspaces ------------------------------- */
@@ -85,6 +88,17 @@ export interface ApiTestRequestBody {
   authType: string;
   authConfig?: string | null;
   headers?: string | null;
+  /** Raw request body to send (ignored for GET); e.g. a sample JSON payload to test with. */
+  body?: string | null;
+  /** If set and the call succeeds, the response is analyzed by this platform AI provider. Pro plan only. */
+  aiProvider?: string | null;
+}
+
+export interface AiInsights {
+  anomalies: number;
+  quality: "good" | "fair" | "poor";
+  summary: string;
+  recommendations: string[];
 }
 
 export interface ApiTestResult {
@@ -93,6 +107,7 @@ export interface ApiTestResult {
   latencyMs: number;
   responseBody: string | null;
   errorMessage: string | null;
+  insights: AiInsights | null;
 }
 
 /** Ad-hoc test of a not-yet-saved upstream configuration. Credentials are transient. */
@@ -148,6 +163,7 @@ export interface AdminAccountDto {
   email: string;
   fullName: string;
   plan: string | null;
+  enabled: boolean;
   workspaceCount: number;
   apiCount: number;
   tokenAllotment: number;
@@ -164,4 +180,69 @@ export function changeAccountPlan(id: number, plan: string) {
     method: "PATCH",
     body: JSON.stringify({ plan }),
   });
+}
+
+export function setAccountEnabled(id: number, enabled: boolean) {
+  return apiFetch<AdminAccountDto>(`/api/admin/accounts/${id}/enabled`, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+/* ------------------------------- ai providers ------------------------------ */
+// Platform-owned: APIConnector supplies the AI provider credentials (AI_analysis/.env), not
+// the user. This is a fixed, read-only catalog — no create/delete/API-key entry anywhere.
+// Using a provider (attaching one, or the standalone analyze call) is Pro-plan only.
+
+export interface AiProviderCatalogEntry {
+  provider: "ANTHROPIC" | "OPENAI";
+  label: string;
+}
+
+/** The platform's available AI providers. Visible to everyone; *using* one is Pro-gated. */
+export function listAiProviderCatalog() {
+  return apiFetch<AiProviderCatalogEntry[]>("/api/ai-providers");
+}
+
+/** Standalone analysis of arbitrary data using a platform AI provider. Pro plan only (403/400 otherwise). */
+export function analyzeWithProvider(provider: string, data: unknown) {
+  return apiFetch<{ success: boolean; insights: AiInsights | null }>(`/api/ai-providers/${provider}/analyze`, {
+    method: "POST",
+    body: JSON.stringify({ data }),
+  });
+}
+
+/* ------------------------------- plan requests ------------------------------ */
+
+export interface PlanUpgradeRequestDto {
+  id: number;
+  accountId: number;
+  email: string;
+  fullName: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requestedAt: string;
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+}
+
+/** Requests a plan upgrade for the caller. */
+export function requestPlanUpgrade() {
+  return apiFetch<PlanUpgradeRequestDto>("/api/plan-requests", { method: "POST" });
+}
+
+/** The caller's latest plan-upgrade request, or undefined if they've never requested (204). */
+export function getMyPlanRequest() {
+  return apiFetch<PlanUpgradeRequestDto | undefined>("/api/plan-requests/me");
+}
+
+export function listPendingPlanRequests() {
+  return apiFetch<PlanUpgradeRequestDto[]>("/api/admin/plan-requests");
+}
+
+export function approvePlanRequest(id: number) {
+  return apiFetch<PlanUpgradeRequestDto>(`/api/admin/plan-requests/${id}/approve`, { method: "POST" });
+}
+
+export function rejectPlanRequest(id: number) {
+  return apiFetch<PlanUpgradeRequestDto>(`/api/admin/plan-requests/${id}/reject`, { method: "POST" });
 }

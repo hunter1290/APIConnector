@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
 import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
@@ -8,12 +10,38 @@ import { RESPONSE_MODE_LABELS, SECURITY_LABELS } from "@/types/connector";
 
 export default function ApisPage() {
   const { activeSet, removeApi, loading } = useWorkspace();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [showSubmitted, setShowSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("submitted") === "1") {
+      setShowSubmitted(true);
+      router.replace("/dashboard/apis");
+    }
+  }, [searchParams, router]);
 
   if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {showSubmitted && (
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-brand/20 bg-brand/5 p-4 text-sm">
+          <p>
+            <span className="font-medium">Request submitted.</span> The connection is saved as a
+            draft — a live, servable uniform endpoint for it will be available soon.
+          </p>
+          <button
+            onClick={() => setShowSubmitted(false)}
+            aria-label="Dismiss"
+            className="shrink-0 text-zinc-400 hover:text-foreground"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Third-party APIs</h1>

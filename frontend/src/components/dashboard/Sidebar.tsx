@@ -28,6 +28,7 @@ const NAV: NavItem[] = [
   { href: "/dashboard/apis", label: "Third-party APIs", icon: <svg {...iconProps}><path d="M9 15l6-6M8.5 12H6a3 3 0 010-6h2.5M15.5 12H18a3 3 0 010 6h-2.5" /></svg> },
   { href: "/dashboard/explorer", label: "API Explorer", icon: <svg {...iconProps}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg> },
   { href: "/dashboard/analytics", label: "Analytics", icon: <svg {...iconProps}><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 4-5" /></svg> },
+  { href: "/dashboard/ai-providers", label: "AI Providers", icon: <svg {...iconProps}><path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /><circle cx="12" cy="12" r="3.2" /></svg> },
 ];
 
 const ADMIN_NAV: NavItem = {

@@ -80,11 +80,30 @@ const FEATURES: Feature[] = [
   },
   {
     title: "AI-powered insights",
-    desc: "Claude-powered analysis surfaces anomalies, data-quality issues, and efficiency wins across every connection — before they reach your clients.",
+    desc: "Bring your own Anthropic or OpenAI key and get real, on-demand analysis of any connection's response — anomalies, data-quality issues, and concrete recommendations.",
     icon: (
       <svg {...iconProps}>
         <path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
         <circle cx="12" cy="12" r="3.2" />
+      </svg>
+    ),
+  },
+  {
+    title: "Test it before you trust it",
+    desc: "A guided, Postman-style flow: validate a real HTTP response — with a request body for POST/PUT/PATCH — before you ever pick a security scheme or save the connection.",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M9 12l2 2 4-4" />
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+    ),
+  },
+  {
+    title: "Admin governance",
+    desc: "Enable or disable any account, and approve or reject plan-upgrade requests — all from a dedicated admin view, with full monitoring of every workspace's token usage.",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z" />
       </svg>
     ),
   },
@@ -198,7 +217,7 @@ export default function Home() {
             Everything between you and your APIs
           </h2>
           <p className="mt-3 text-zinc-600 dark:text-zinc-400">
-            Six capabilities that turn a mess of upstream integrations into one
+            The capabilities that turn a mess of upstream integrations into one
             dependable, observable interface.
           </p>
         </div>
@@ -245,20 +264,21 @@ export default function Home() {
           <div className="max-w-2xl">
             <span className="text-sm font-semibold text-brand">AI analysis</span>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Insight into your data — and its efficiency
+              Real AI analysis, included with Pro
             </h2>
             <p className="mt-4 text-zinc-600 dark:text-zinc-400">
-              Every request flowing through APIConnector is analyzed by a Claude
-              model. Spot schema drift, redundant upstream calls, latency
-              regressions, and data-quality issues automatically — with concrete
-              recommendations to make each connection faster and cheaper.
+              Pro accounts can attach a real Claude or GPT model to any connection&apos;s
+              AI-processed response mode and get a real, structured analysis of what the
+              upstream actually returned — anomalies, a quality read, and concrete
+              recommendations. APIConnector supplies the credentials; there&apos;s nothing for
+              you to configure.
             </p>
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {[
               ["Anomaly detection", "Flags unexpected shapes, values, and error spikes."],
-              ["Efficiency scoring", "Rates each connection and suggests where to cut latency and cost."],
-              ["Data-quality checks", "Surfaces missing fields, type mismatches, and stale sources."],
+              ["Quality scoring", "Rates each response good/fair/poor with a short summary."],
+              ["Actionable recommendations", "Concrete, specific tips for what to fix next."],
             ].map(([t, d]) => (
               <div key={t} className="rounded-xl border border-black/10 bg-background p-5 dark:border-white/10">
                 <h3 className="text-sm font-semibold">{t}</h3>

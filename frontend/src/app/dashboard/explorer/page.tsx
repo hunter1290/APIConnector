@@ -150,6 +150,19 @@ function Operation({ api }: { api: ThirdPartyApi }) {
                   {result.errorMessage ?? "The test call failed."}
                 </p>
               )}
+              {result.insights && (
+                <div className="mt-3 rounded-lg border border-brand/20 bg-brand/5 p-3 text-sm">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand">
+                    AI insights · {result.insights.quality} · {result.insights.anomalies} anomalies
+                  </div>
+                  <p className="mt-1 text-zinc-600 dark:text-zinc-400">{result.insights.summary}</p>
+                  {result.insights.recommendations.length > 0 && (
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-zinc-500">
+                      {result.insights.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

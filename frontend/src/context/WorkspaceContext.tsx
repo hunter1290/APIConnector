@@ -14,6 +14,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { ApiError } from "@/lib/api";
 import {
   type ApiDto,
   createApiReq,
@@ -43,6 +44,14 @@ export interface AddApiInput {
   status: ConnectionStatus;
   authConfig?: string | null;
   headers?: string | null;
+  /** Platform AI provider ("ANTHROPIC"/"OPENAI") to attach. Pro plan only. */
+  aiProvider?: string | null;
+}
+
+export interface AddApiResult {
+  ok: boolean;
+  /** The real reason it failed — a backend validation/permission message, or a network-failure note. */
+  error?: string;
 }
 
 interface WorkspaceContextValue {
@@ -55,12 +64,24 @@ interface WorkspaceContextValue {
   setActiveSet: (id: string) => void;
   addSet: (name: string, description?: string) => Promise<boolean>;
   deleteSet: (id: string) => Promise<void>;
-  addApi: (api: AddApiInput) => Promise<boolean>;
+  addApi: (api: AddApiInput) => Promise<AddApiResult>;
   removeApi: (apiId: string) => Promise<void>;
   reload: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
+
+/** Prefers the backend's actual error message over a generic "is it running?" guess. */
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const fieldErrors = err.body?.fieldErrors;
+    if (fieldErrors && Object.keys(fieldErrors).length) {
+      return Object.entries(fieldErrors).map(([field, msg]) => `${field}: ${msg}`).join("; ");
+    }
+    return err.message;
+  }
+  return fallback;
+}
 
 /* ----------------------------- backend → UI ------------------------------ */
 
@@ -83,6 +104,7 @@ function toThirdPartyApi(a: ApiDto): ThirdPartyApi {
     responseMode: a.responseMode as ResponseMode,
     status: mapStatus(a.status),
     uniformPath: a.uniformPath ?? "",
+    aiProvider: a.aiProvider,
     createdAt: a.createdAt,
   };
 }
@@ -113,8 +135,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (stored && mapped.some((s) => s.id === stored)) return stored;
         return mapped[0]?.id ?? null;
       });
-    } catch {
-      setError("Could not load workspaces. Is the backend running?");
+    } catch (err) {
+      setError(describeError(err, "Could not load workspaces. Confirm the backend is running."));
     } finally {
       setLoading(false);
     }
@@ -140,8 +162,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActiveSetId(String(w.id));
       setError(null);
       return true;
-    } catch {
-      setError("Could not create workspace. Is the backend running?");
+    } catch (err) {
+      setError(describeError(err, "Could not create workspace. Confirm the backend is running."));
       return false;
     }
   }, []);
@@ -155,14 +177,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         return next;
       });
       setError(null);
-    } catch {
-      setError("Could not delete workspace.");
+    } catch (err) {
+      setError(describeError(err, "Could not delete workspace."));
     }
   }, []);
 
   const addApi = useCallback(
-    async (input: AddApiInput) => {
-      if (!activeSetId) return false;
+    async (input: AddApiInput): Promise<AddApiResult> => {
+      if (!activeSetId) {
+        return { ok: false, error: "No active workspace selected." };
+      }
       try {
         const dto = await createApiReq({
           workspaceId: Number(activeSetId),
@@ -175,6 +199,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           headers: input.headers ?? null,
           responseMode: input.responseMode,
           status: input.status,
+          aiProvider: input.aiProvider ?? null,
         });
         setSets((prev) =>
           prev.map((s) =>
@@ -182,10 +207,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           ),
         );
         setError(null);
-        return true;
-      } catch {
-        setError("Could not save API. Is the backend running?");
-        return false;
+        return { ok: true };
+      } catch (err) {
+        const message = describeError(err, "Could not reach the backend. Confirm it's running and try again.");
+        setError(message);
+        return { ok: false, error: message };
       }
     },
     [activeSetId],
@@ -200,8 +226,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             s.id === activeSetId ? { ...s, apis: s.apis.filter((a) => a.id !== apiId) } : s,
           ),
         );
-      } catch {
-        setError("Could not remove API.");
+      } catch (err) {
+        setError(describeError(err, "Could not remove API."));
       }
     },
     [activeSetId],
