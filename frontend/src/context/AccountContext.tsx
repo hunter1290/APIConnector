@@ -1,8 +1,9 @@
 "use client";
 
 // USER-LEVEL state (not workspace-scoped): subscription plan and free-token
-// balance. Deterministic seed on first render; hydrate/persist via localStorage
-// in effects so there is no SSR/client hydration mismatch.
+// balance. Backed by the backend (/api/usage/me) — plan changes are admin-only
+// (see /dashboard/admin), so this context is read-only from the normal user's
+// side and just reflects whatever the backend reports.
 
 import {
   createContext,
@@ -13,6 +14,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { getMyUsage } from "@/lib/connectorApi";
 
 export type Plan = "REGULAR" | "PRO";
 
@@ -21,14 +23,7 @@ interface Tokens {
   used: number;
 }
 
-interface AccountState {
-  plan: Plan;
-  tokens: Tokens;
-}
-
-const STORAGE_KEY = "apiconnector.account.v1";
-
-/** Free-token allotment per plan. */
+/** Free-token allotment per plan (mirrors the backend's UserPlan.freeTokens()). */
 export const PLAN_TOKENS: Record<Plan, number> = {
   REGULAR: 10000,
   PRO: 100000,
@@ -39,60 +34,51 @@ export const PLAN_LABELS: Record<Plan, string> = {
   PRO: "Pro",
 };
 
-const SEED: AccountState = { plan: "REGULAR", tokens: { total: PLAN_TOKENS.REGULAR, used: 0 } };
-
 interface AccountContextValue {
   plan: Plan;
   tokens: Tokens;
   tokensRemaining: number;
-  consumeTokens: (amount: number) => void;
-  upgradePlan: (plan: Plan) => void;
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextValue | undefined>(undefined);
 
 export function AccountProvider({ children }: { children: ReactNode }) {
-  const [plan, setPlan] = useState<Plan>(SEED.plan);
-  const [tokens, setTokens] = useState<Tokens>(SEED.tokens);
+  const [plan, setPlan] = useState<Plan>("REGULAR");
+  const [tokens, setTokens] = useState<Tokens>({ total: PLAN_TOKENS.REGULAR, used: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
+    setLoading(true);
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as AccountState;
-      if (parsed.plan) setPlan(parsed.plan);
-      if (parsed.tokens) setTokens(parsed.tokens);
+      const usage = await getMyUsage();
+      setPlan((usage.plan as Plan) ?? "REGULAR");
+      setTokens({ total: usage.tokenAllotment, used: usage.tokensUsed });
+      setError(null);
     } catch {
-      /* ignore corrupt storage */
+      setError("Could not load account usage. Is the backend running?");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ plan, tokens }));
-    } catch {
-      /* ignore quota errors */
-    }
-  }, [plan, tokens]);
-
-  const consumeTokens = useCallback((amount: number) => {
-    setTokens((prev) => ({ ...prev, used: Math.min(prev.total, prev.used + amount) }));
-  }, []);
-
-  const upgradePlan = useCallback((next: Plan) => {
-    setPlan(next);
-    setTokens((prev) => ({ total: PLAN_TOKENS[next], used: Math.min(prev.used, PLAN_TOKENS[next]) }));
-  }, []);
+    refresh();
+  }, [refresh]);
 
   const value = useMemo<AccountContextValue>(
     () => ({
       plan,
       tokens,
       tokensRemaining: Math.max(0, tokens.total - tokens.used),
-      consumeTokens,
-      upgradePlan,
+      loading,
+      error,
+      refresh,
     }),
-    [plan, tokens, consumeTokens, upgradePlan],
+    [plan, tokens, loading, error, refresh],
   );
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;

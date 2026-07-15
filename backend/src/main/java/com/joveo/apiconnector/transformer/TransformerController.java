@@ -3,6 +3,7 @@ package com.joveo.apiconnector.transformer;
 import com.joveo.apiconnector.transformer.dto.TransformerRequest;
 import com.joveo.apiconnector.transformer.dto.TransformerResponse;
 import com.joveo.apiconnector.user.User;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** CRUD endpoints for transformer objects (normalize upstream data → uniform form). */
 @RestController
 @RequestMapping("/api/transformers")
+@Tag(name = "Transformers")
 public class TransformerController {
 
     private final TransformerService transformerService;

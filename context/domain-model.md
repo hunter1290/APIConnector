@@ -9,6 +9,9 @@ users (1) ─────< (N) workspaces
 users (1) ─────< (N) api_details
 workspaces (1) ─< (N) api_details            (api_details.workspace_id nullable)
 users (1) ─────< (N) unified_endpoints
+users (1) ─────< (N) token_usage
+workspaces (1) ─< (N) token_usage            (token_usage.workspace_id nullable)
+api_details (1) ─< (N) token_usage           (token_usage.api_detail_id nullable)
 api_details (1) ─< (N) transformers          (transformer.api_detail_id nullable → global transformer)
 api_details (1) ─< (N) unified_endpoints
 transformers (1) ─< (N) unified_endpoints    (nullable)
@@ -24,6 +27,11 @@ transformers (1) ─< (N) unified_endpoints    (nullable)
 | plan        | enum, nullable| `REGULAR` \| `PRO` (normal users; null for admin)|
 
 Entity: `user/User.java` (implements `UserDetails`). Enums: `Role`, `UserPlan`.
+`UserPlan` carries the free AI-token allotment: `REGULAR`=10 000, `PRO`=100 000
+(`UserPlan.freeTokens()`; mirrors frontend `PLAN_TOKENS`). A seeded `ADMIN` account
+(`admin/AdminBootstrap`, config `app.admin.*`) monitors all accounts; admins have no plan.
+Plan changes are admin-only (`PATCH /api/admin/accounts/{id}/plan`, `AdminService.changePlan`) —
+there is no self-service upgrade; normal users see their plan read-only.
 
 ## workspaces  — per-user grouping of APIs
 | Column      | Type       | Notes                    |
@@ -45,7 +53,7 @@ Entity: `workspace/Workspace.java`. API: `/api/workspaces`.
 | http_method    | enum           | GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS |
 | request_format | enum           | JSON/XML/CSV/SOAP/FORM_URLENCODED      |
 | auth_type      | enum           | NONE/API_KEY/BASIC/BEARER_TOKEN/OAUTH2/HMAC/JWT |
-| auth_config    | text (JSON)    | credentials/config (encrypt in prod; never returned in API responses) |
+| auth_config    | text (JSON)    | credentials/config (encrypt in prod; never returned in API responses). Also used transiently by `ApiTestService` to build live-test headers server-side — never sent to the client. |
 | headers        | text (JSON)    | default headers/query params           |
 | response_mode  | enum           | DIRECT/WEBHOOK/AI_INSIGHT              |
 | uniform_path   | varchar(512)   | generated `/v1/{workspace}/{api}`      |
@@ -79,5 +87,22 @@ Entity: `transformer/Transformer.java`.
 
 Entity: `endpoint/UnifiedEndpoint.java`. Enum: `EndpointStatus`.
 
+## token_usage  — AI-token consumption events (append-only)
+| Column         | Type              | Notes                                       |
+|----------------|-------------------|---------------------------------------------|
+| user_id        | FK → users        | account charged (many events per user)      |
+| workspace_id   | FK → workspaces, nullable | attribution                         |
+| api_detail_id  | FK → api_details, nullable | attribution                        |
+| tokens         | bigint            | tokens consumed by this event (> 0)         |
+| source         | enum              | AI_INSIGHT / TRANSFORM / OTHER              |
+| description    | text, nullable    | free-text note                              |
+| created_at     | timestamptz       | event time (no `updated_at`; rows immutable)|
+
+Entity: `usage/TokenUsage.java`. Enum: `UsageSource`. API: `/api/usage` (record + `/me`).
+Account "used" = `sum(tokens)` by user; per-workspace used = sum by workspace. Aggregated
+for admins by `AdminService` (`/api/admin/**`).
+
 ## Not yet modeled (candidates)
 Observability/request logs (feature: tracing), AI insight records (feature: AI analysis).
+Token usage is now modeled (`token_usage`); the executor that *emits* usage during
+AI_INSIGHT calls is still planned (usage is recorded via the API today).

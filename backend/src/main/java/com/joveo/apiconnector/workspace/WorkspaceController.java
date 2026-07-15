@@ -3,6 +3,7 @@ package com.joveo.apiconnector.workspace;
 import com.joveo.apiconnector.user.User;
 import com.joveo.apiconnector.workspace.dto.WorkspaceRequest;
 import com.joveo.apiconnector.workspace.dto.WorkspaceResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** CRUD endpoints for the authenticated user's workspaces. */
 @RestController
 @RequestMapping("/api/workspaces")
+@Tag(name = "Workspaces")
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;

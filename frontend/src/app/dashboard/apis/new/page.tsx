@@ -6,6 +6,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
 import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
+import { testApi, type ApiTestResult } from "@/lib/connectorApi";
 import {
   RESPONSE_MODE_LABELS,
   SECURITY_LABELS,
@@ -24,11 +25,13 @@ export default function NewApiPage() {
   const router = useRouter();
   const { activeSet, addApi, loading } = useWorkspace();
 
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [method, setMethod] = useState<HttpMethod>("GET");
   const [format, setFormat] = useState<DataFormat>("JSON");
-  const [security, setSecurity] = useState<SecurityScheme>("API_KEY");
+  const [security, setSecurity] = useState<SecurityScheme>("NONE");
   const [responseMode, setResponseMode] = useState<ResponseMode>("DIRECT");
   // Credential fields — sent to the backend as authConfig.
   const [creds, setCreds] = useState<Record<string, string>>({});
@@ -36,11 +39,52 @@ export default function NewApiPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [step1Result, setStep1Result] = useState<ApiTestResult | null>(null);
+  const [testingStep1, setTestingStep1] = useState(false);
+  const [step2Result, setStep2Result] = useState<ApiTestResult | null>(null);
+  const [testingStep2, setTestingStep2] = useState(false);
+
   if (loading) return <DashboardLoading />;
   if (!activeSet) return <NoWorkspace />;
 
   function setCred(key: string, value: string) {
     setCreds((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function credsConfig(): string | null {
+    return Object.keys(creds).length ? JSON.stringify(creds) : null;
+  }
+
+  async function testConnection() {
+    setTestingStep1(true);
+    setStep1Result(null);
+    try {
+      const result = await testApi({ baseUrl, httpMethod: method, requestFormat: format, authType: "NONE" });
+      setStep1Result(result);
+    } catch {
+      setStep1Result({ success: false, httpStatus: null, latencyMs: 0, responseBody: null, errorMessage: "Could not reach the backend." });
+    } finally {
+      setTestingStep1(false);
+    }
+  }
+
+  async function retestWithCredentials() {
+    setTestingStep2(true);
+    setStep2Result(null);
+    try {
+      const result = await testApi({
+        baseUrl,
+        httpMethod: method,
+        requestFormat: format,
+        authType: security,
+        authConfig: credsConfig(),
+      });
+      setStep2Result(result);
+    } catch {
+      setStep2Result({ success: false, httpStatus: null, latencyMs: 0, responseBody: null, errorMessage: "Could not reach the backend." });
+    } finally {
+      setTestingStep2(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -59,6 +103,8 @@ export default function NewApiPage() {
     }
   }
 
+  const step1Passed = step1Result?.success === true;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -71,15 +117,16 @@ export default function NewApiPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* basics */}
+      <StepHeader step={step} />
+
+      {step === 1 && (
         <Card title="Endpoint">
           <Field label="Name">
             <input required value={name} onChange={(e) => setName(e.target.value)}
               placeholder="Acme Orders" className={inputClass} />
           </Field>
           <Field label="Base URL">
-            <input required type="url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
+            <input required type="url" value={baseUrl} onChange={(e) => { setBaseUrl(e.target.value); setStep1Result(null); }}
               placeholder="https://api.acme.com/orders" className={inputClass} />
           </Field>
           <div className="grid grid-cols-2 gap-4">
@@ -94,9 +141,36 @@ export default function NewApiPage() {
               </select>
             </Field>
           </div>
-        </Card>
 
-        {/* security selection */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={!baseUrl || testingStep1}
+              className="rounded-full border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
+            >
+              {testingStep1 ? "Testing…" : "Test connection"}
+            </button>
+            <span className="text-xs text-zinc-500">
+              Calls the endpoint with no credentials to confirm it&apos;s reachable.
+            </span>
+          </div>
+          <TestResultView result={step1Result} />
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              disabled={!step1Passed}
+              className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-40"
+            >
+              Next: Security
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {step === 2 && (
         <Card title="Security">
           <Field label="Scheme">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -104,7 +178,7 @@ export default function NewApiPage() {
                 <button
                   type="button"
                   key={s}
-                  onClick={() => setSecurity(s)}
+                  onClick={() => { setSecurity(s); setStep2Result(null); }}
                   className={`rounded-lg border px-3 py-2 text-sm ${
                     security === s
                       ? "border-brand bg-brand/10 text-brand"
@@ -117,59 +191,101 @@ export default function NewApiPage() {
             </div>
           </Field>
           <SecurityFields scheme={security} creds={creds} setCred={setCred} />
-        </Card>
 
-        {/* response mode */}
-        <Card title="Response mode">
-          <div className="space-y-2">
-            {RESPONSE_MODES.map((m) => (
-              <label
-                key={m}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${
-                  responseMode === m ? "border-brand bg-brand/5" : "border-black/15 dark:border-white/20"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="responseMode"
-                  checked={responseMode === m}
-                  onChange={() => setResponseMode(m)}
-                  className="mt-0.5 accent-[var(--color-brand)]"
-                />
-                <span>
-                  <span className="font-medium">{RESPONSE_MODE_LABELS[m]}</span>
-                  <span className="block text-xs text-zinc-500">{RESPONSE_MODE_HINTS[m]}</span>
-                </span>
-              </label>
-            ))}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={retestWithCredentials}
+              disabled={testingStep2}
+              className="rounded-full border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
+            >
+              {testingStep2 ? "Testing…" : "Retest with these credentials"}
+            </button>
+            <span className="text-xs text-zinc-500">Optional — validates the authenticated call.</span>
           </div>
-          {responseMode === "WEBHOOK" && (
-            <Field label="Webhook callback URL">
-              <input type="url" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)}
-                placeholder="https://your-app.com/callbacks/apiconnector" className={inputClass} />
-            </Field>
-          )}
+          <TestResultView result={step2Result} />
+
+          <div className="flex justify-between pt-2">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="rounded-full border border-black/15 px-5 py-2 text-sm dark:border-white/20"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep(3)}
+              className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-brand-fg hover:opacity-90"
+            >
+              Next: Response mode
+            </button>
+          </div>
         </Card>
+      )}
 
-        {error && (
-          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {error}
-          </p>
-        )}
+      {step === 3 && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Card title="Response mode">
+            <div className="space-y-2">
+              {RESPONSE_MODES.map((m) => (
+                <label
+                  key={m}
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${
+                    responseMode === m ? "border-brand bg-brand/5" : "border-black/15 dark:border-white/20"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="responseMode"
+                    checked={responseMode === m}
+                    onChange={() => setResponseMode(m)}
+                    className="mt-0.5 accent-[var(--color-brand)]"
+                  />
+                  <span>
+                    <span className="font-medium">{RESPONSE_MODE_LABELS[m]}</span>
+                    <span className="block text-xs text-zinc-500">{RESPONSE_MODE_HINTS[m]}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {responseMode === "WEBHOOK" && (
+              <Field label="Webhook callback URL">
+                <input type="url" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://your-app.com/callbacks/apiconnector" className={inputClass} />
+              </Field>
+            )}
+          </Card>
 
-        <div className="flex justify-end gap-3">
-          <Link href="/dashboard/apis" className="rounded-full border border-black/15 px-5 py-2 text-sm dark:border-white/20">
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
-          >
-            {submitting ? "Saving…" : "Save API"}
-          </button>
-        </div>
-      </form>
+          {error && (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="rounded-full border border-black/15 px-5 py-2 text-sm dark:border-white/20"
+            >
+              Back
+            </button>
+            <div className="flex gap-3">
+              <Link href="/dashboard/apis" className="rounded-full border border-black/15 px-5 py-2 text-sm dark:border-white/20">
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+              >
+                {submitting ? "Saving…" : "Save API"}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -182,6 +298,56 @@ const RESPONSE_MODE_HINTS: Record<ResponseMode, string> = {
 
 const inputClass =
   "w-full rounded-lg border border-black/15 bg-background px-3 py-2 text-sm dark:border-white/20";
+
+function StepHeader({ step }: { step: 1 | 2 | 3 }) {
+  const steps: { n: 1 | 2 | 3; label: string }[] = [
+    { n: 1, label: "Endpoint" },
+    { n: 2, label: "Security" },
+    { n: 3, label: "Response mode" },
+  ];
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      {steps.map((s, i) => (
+        <div key={s.n} className="flex items-center gap-2">
+          <span
+            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
+              step === s.n
+                ? "bg-brand text-brand-fg"
+                : step > s.n
+                  ? "bg-brand/20 text-brand"
+                  : "bg-black/5 text-zinc-400 dark:bg-white/10"
+            }`}
+          >
+            {s.n}
+          </span>
+          <span className={step === s.n ? "font-medium" : "text-zinc-500"}>{s.label}</span>
+          {i < steps.length - 1 && <span className="mx-1 text-zinc-300 dark:text-zinc-700">→</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TestResultView({ result }: { result: ApiTestResult | null }) {
+  if (!result) return null;
+  if (!result.success) {
+    return (
+      <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        {result.errorMessage ?? "The test call failed."}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-zinc-500">
+        <span className="font-mono">{result.httpStatus}</span> · {result.latencyMs}ms
+      </div>
+      <pre className="max-h-48 overflow-auto rounded-lg bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-200">
+        {result.responseBody ?? "(empty body)"}
+      </pre>
+    </div>
+  );
+}
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useAccount, PLAN_LABELS, PLAN_TOKENS, type Plan } from "@/context/AccountContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -23,8 +24,9 @@ const PLAN_FEATURES: Record<Plan, string[]> = {
 
 export default function AccountPage() {
   const { user } = useAuth();
-  const { plan, tokens, tokensRemaining, upgradePlan } = useAccount();
+  const { plan, tokens, tokensRemaining } = useAccount();
   const { sets } = useWorkspace();
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -57,53 +59,54 @@ export default function AccountPage() {
         </p>
       </section>
 
-      {/* plan / upgrade */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Plan</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {(["REGULAR", "PRO"] as Plan[]).map((p) => {
-            const current = plan === p;
-            const isUpgrade = p === "PRO" && plan === "REGULAR";
-            return (
-              <div
-                key={p}
-                className={`rounded-2xl border p-6 ${
-                  current ? "border-brand bg-brand/5" : "border-black/10 dark:border-white/10"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">{PLAN_LABELS[p]}</h3>
-                  {current && (
-                    <span className="rounded-full bg-brand px-2.5 py-0.5 text-xs font-medium text-brand-fg">
-                      Current
-                    </span>
-                  )}
+      {/* plan (read-only — only an admin can change it) */}
+      {isAdmin ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Plan</h2>
+          <p className="text-sm text-zinc-500">
+            Admin accounts have no plan. Manage everyone else&apos;s plan from{" "}
+            <Link href="/dashboard/admin" className="text-brand hover:underline">
+              Admin
+            </Link>
+            .
+          </p>
+        </section>
+      ) : (
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Plan</h2>
+          <p className="text-xs text-zinc-500">Only an admin can change your plan.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(["REGULAR", "PRO"] as Plan[]).map((p) => {
+              const current = plan === p;
+              return (
+                <div
+                  key={p}
+                  className={`rounded-2xl border p-6 ${
+                    current ? "border-brand bg-brand/5" : "border-black/10 dark:border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">{PLAN_LABELS[p]}</h3>
+                    {current && (
+                      <span className="rounded-full bg-brand px-2.5 py-0.5 text-xs font-medium text-brand-fg">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                  <ul className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {PLAN_FEATURES[p].map((f) => (
+                      <li key={f} className="flex gap-2">
+                        <span className="text-brand">✓</span>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {PLAN_FEATURES[p].map((f) => (
-                    <li key={f} className="flex gap-2">
-                      <span className="text-brand">✓</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                {!current && (
-                  <button
-                    onClick={() => upgradePlan(p)}
-                    className={`mt-5 w-full rounded-full px-4 py-2 text-sm font-medium ${
-                      isUpgrade
-                        ? "bg-brand text-brand-fg hover:opacity-90"
-                        : "border border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                    }`}
-                  >
-                    {isUpgrade ? "Upgrade to Pro" : "Switch to Regular"}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

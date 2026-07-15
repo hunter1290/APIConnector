@@ -15,4 +15,6 @@ public interface ApiDetailRepository extends JpaRepository<ApiDetail, Long> {
     Optional<ApiDetail> findByIdAndUserId(Long id, Long userId);
 
     long countByWorkspaceId(Long workspaceId);
+
+    long countByUserId(Long userId);
 }

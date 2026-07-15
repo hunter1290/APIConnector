@@ -45,9 +45,30 @@ Client ◄┤ response │◄─────────────────
 - **Error handling** — any stage failure → normalized `ApiError`; endpoint marked `ERROR`.
 - **Efficiency / AI** — synced payloads + logs feed anomaly detection and efficiency scoring.
 
+## Live upstream testing (validation, not the runtime pipeline)
+Separate from the flow above, `ApiTestService` (`api/` package) performs a **synchronous,
+one-off slice of steps 2–4** — translate security, call the upstream, return the raw
+response — purely to let a user validate a connection, either before saving it or against
+an already-saved one:
+```
+POST /api/apis/test        ad-hoc config (baseUrl/method/format/authType/authConfig) — used
+                            by the Add-API wizard's Step 1 (no-auth probe) and Step 2
+                            (optional authenticated retest). Credentials are transient.
+POST /api/apis/{id}/test   tests a saved ApiDetail using its persisted config, resolved
+                            server-side — credentials never reach the client. Used by the
+                            Explorer's "Try it".
+```
+`success` means *a real HTTP response was received* (any status, including 4xx) — not `2xx`.
+Only connection-level failures (DNS, timeout, refused, or blocked by `SsrfGuard`) are
+`success:false`. There is **no caching or `unified_endpoints` update** from a test call — it
+never touches `cached_payload`/`last_synced_at`, and it is not the resolve-by-`url_path`
+runtime described above, which remains planned.
+
 ## Current vs. planned
 - **Built:** entities/tables, auth, **CRUD APIs** for workspaces / api_details / transformers
   (user-scoped, JWT-protected — `/api/workspaces`, `/api/apis`, `/api/transformers`),
   uniform-endpoint model, cached payload fields. `uniform_path` is generated on API create.
-- **Planned:** the executor that performs steps 2–6 (resolve → translate → call → normalize →
-  cache → observe), wiring the frontend to these CRUD APIs, plus observability + AI insight tables.
+  Also built: the live-test capability above (validation only, not the runtime pipeline).
+- **Planned:** the executor that performs steps 2–6 as a real, cached, client-facing pipeline
+  (resolve by `url_path` → translate → call → normalize → cache → observe), retry/recovery
+  when an upstream is down, plus observability + AI insight tables.

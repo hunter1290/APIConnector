@@ -3,6 +3,7 @@ package com.joveo.apiconnector.auth;
 import com.joveo.apiconnector.auth.dto.AuthResponse;
 import com.joveo.apiconnector.auth.dto.LoginRequest;
 import com.joveo.apiconnector.auth.dto.RegisterRequest;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Public authentication endpoints. */
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Auth")
 public class AuthController {
 
     private final AuthService authService;

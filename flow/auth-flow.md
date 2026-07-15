@@ -43,4 +43,6 @@ GET /api/users/me   Authorization: Bearer <token>
 
 ## Public vs. protected
 - **Public:** `/api/auth/**`, `/actuator/health`, `/actuator/info`.
+- **Admin-only:** `/api/admin/**` (valid JWT **with ROLE_ADMIN**; else 403). Enforced in
+  `SecurityConfig` and again via `@PreAuthorize` on the controller. See `admin-monitoring.md`.
 - **Protected:** everything else (valid JWT required).

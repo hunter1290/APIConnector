@@ -6,6 +6,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useAccount } from "@/context/AccountContext";
 import { NoWorkspace } from "@/components/dashboard/NoWorkspace";
 import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
+import { recordUsage, testSavedApi, type ApiTestResult } from "@/lib/connectorApi";
 import {
   RESPONSE_MODE_LABELS,
   SECURITY_LABELS,
@@ -58,21 +59,29 @@ export default function ExplorerPage() {
 }
 
 function Operation({ api }: { api: ThirdPartyApi }) {
-  const { consumeTokens, tokensRemaining } = useAccount();
+  const { tokensRemaining, refresh } = useAccount();
   const [open, setOpen] = useState(false);
-  const [response, setResponse] = useState<string | null>(null);
+  const [result, setResult] = useState<ApiTestResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fullUrl = `${API_HOST}${api.uniformPath}`;
 
-  function tryIt() {
+  async function tryIt() {
     if (tokensRemaining < TRY_COST) return;
     setRunning(true);
-    setResponse(null);
-    // Simulated call (frontend-only). Real request hits the backend later.
-    consumeTokens(TRY_COST);
-    setResponse(sampleResponse(api));
-    setRunning(false);
+    setResult(null);
+    setError(null);
+    try {
+      const testResult = await testSavedApi(Number(api.id));
+      setResult(testResult);
+      await recordUsage({ apiDetailId: Number(api.id), tokens: TRY_COST, source: "AI_INSIGHT" });
+      await refresh();
+    } catch {
+      setError("Could not reach the backend to run this test.");
+    } finally {
+      setRunning(false);
+    }
   }
 
   return (
@@ -120,14 +129,27 @@ function Operation({ api }: { api: ThirdPartyApi }) {
             </span>
           </div>
 
-          {response && (
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+          {result && (
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Response · 200 OK
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Response
+                {result.success && (
+                  <span className="rounded bg-black/5 px-1.5 py-0.5 font-mono normal-case text-zinc-500 dark:bg-white/10">
+                    {result.httpStatus} · {result.latencyMs}ms
+                  </span>
+                )}
               </h4>
-              <pre className="overflow-x-auto rounded-lg bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-200">
-                {response}
-              </pre>
+              {result.success ? (
+                <pre className="overflow-x-auto rounded-lg bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-200">
+                  {result.responseBody ?? "(empty body)"}
+                </pre>
+              ) : (
+                <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                  {result.errorMessage ?? "The test call failed."}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -143,28 +165,4 @@ function Info({ label, value, mono }: { label: string; value: string; mono?: boo
       <div className={`mt-0.5 break-all text-sm ${mono ? "font-mono text-xs" : ""}`}>{value}</div>
     </div>
   );
-}
-
-function sampleResponse(api: ThirdPartyApi): string {
-  const base = {
-    source: `${api.format} → JSON (normalized)`,
-    security: `${SECURITY_LABELS[api.security]} (translated)`,
-    data: [{ id: "A-1042", total: 249.0, status: "shipped" }],
-    _meta: { latencyMs: 84, traceId: "c1f9a83e", uniformPath: api.uniformPath },
-  };
-  if (api.responseMode === "AI_INSIGHT") {
-    return JSON.stringify(
-      { ...base, insights: { anomalies: 0, quality: "good", note: "Schema stable; no drift." } },
-      null,
-      2,
-    );
-  }
-  if (api.responseMode === "WEBHOOK") {
-    return JSON.stringify(
-      { accepted: true, deliverTo: "your registered webhook", traceId: "c1f9a83e" },
-      null,
-      2,
-    );
-  }
-  return JSON.stringify(base, null, 2);
 }

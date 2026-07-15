@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 
 interface NavItem {
@@ -29,9 +30,17 @@ const NAV: NavItem[] = [
   { href: "/dashboard/analytics", label: "Analytics", icon: <svg {...iconProps}><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 4-5" /></svg> },
 ];
 
+const ADMIN_NAV: NavItem = {
+  href: "/dashboard/admin",
+  label: "Admin",
+  icon: <svg {...iconProps}><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z" /></svg>,
+};
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const { sets, activeSet, activeSetId, setActiveSet, addSet, deleteSet, error } = useWorkspace();
+  const nav = user?.role === "ADMIN" ? [...NAV, ADMIN_NAV] : NAV;
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
 
@@ -123,7 +132,7 @@ export function Sidebar() {
 
       {/* nav */}
       <nav className="flex-1 space-y-1 px-3 py-2">
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const active =
             item.href === "/dashboard"
               ? pathname === "/dashboard"

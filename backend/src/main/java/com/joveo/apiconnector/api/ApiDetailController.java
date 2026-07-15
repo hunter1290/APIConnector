@@ -3,6 +3,7 @@ package com.joveo.apiconnector.api;
 import com.joveo.apiconnector.api.dto.ApiDetailRequest;
 import com.joveo.apiconnector.api.dto.ApiDetailResponse;
 import com.joveo.apiconnector.user.User;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** CRUD endpoints for the authenticated user's third-party APIs. */
 @RestController
 @RequestMapping("/api/apis")
+@Tag(name = "Third-party APIs")
 public class ApiDetailController {
 
     private final ApiDetailService apiDetailService;
