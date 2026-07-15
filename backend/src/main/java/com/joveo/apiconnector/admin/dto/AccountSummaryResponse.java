@@ -6,6 +6,7 @@ public record AccountSummaryResponse(
         String email,
         String fullName,
         String plan,
+        boolean enabled,
         long workspaceCount,
         long apiCount,
         long tokenAllotment,

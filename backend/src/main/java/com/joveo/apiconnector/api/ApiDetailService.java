@@ -1,5 +1,6 @@
 package com.joveo.apiconnector.api;
 
+import com.joveo.apiconnector.ai.AiAccessGuard;
 import com.joveo.apiconnector.api.dto.ApiDetailRequest;
 import com.joveo.apiconnector.api.dto.ApiDetailResponse;
 import com.joveo.apiconnector.common.SlugUtil;
@@ -19,13 +20,16 @@ public class ApiDetailService {
     private final ApiDetailRepository apiDetailRepository;
     private final TransformerRepository transformerRepository;
     private final WorkspaceService workspaceService;
+    private final AiAccessGuard aiAccessGuard;
 
     public ApiDetailService(ApiDetailRepository apiDetailRepository,
                             TransformerRepository transformerRepository,
-                            WorkspaceService workspaceService) {
+                            WorkspaceService workspaceService,
+                            AiAccessGuard aiAccessGuard) {
         this.apiDetailRepository = apiDetailRepository;
         this.transformerRepository = transformerRepository;
         this.workspaceService = workspaceService;
+        this.aiAccessGuard = aiAccessGuard;
     }
 
     @Transactional(readOnly = true)
@@ -47,6 +51,9 @@ public class ApiDetailService {
 
     @Transactional
     public ApiDetailResponse create(User user, ApiDetailRequest request) {
+        if (request.aiProvider() != null) {
+            aiAccessGuard.requirePro(user);
+        }
         Workspace workspace = workspaceService.require(user, request.workspaceId());
         ApiDetail api = ApiDetail.builder()
                 .user(user)
@@ -62,6 +69,7 @@ public class ApiDetailService {
                 .responseMode(request.responseMode())
                 .status(request.status() != null ? request.status() : ConnectionStatus.DRAFT)
                 .uniformPath(uniformPath(workspace, request.name()))
+                .aiProvider(request.aiProvider())
                 .build();
         apiDetailRepository.save(api);
         return ApiDetailResponse.from(api);
@@ -69,6 +77,9 @@ public class ApiDetailService {
 
     @Transactional
     public ApiDetailResponse update(User user, Long id, ApiDetailRequest request) {
+        if (request.aiProvider() != null) {
+            aiAccessGuard.requirePro(user);
+        }
         ApiDetail api = require(user, id);
         Workspace workspace = workspaceService.require(user, request.workspaceId());
         api.setWorkspace(workspace);
@@ -87,6 +98,7 @@ public class ApiDetailService {
             api.setStatus(request.status());
         }
         api.setUniformPath(uniformPath(workspace, request.name()));
+        api.setAiProvider(request.aiProvider());
         apiDetailRepository.save(api);
         return ApiDetailResponse.from(api);
     }

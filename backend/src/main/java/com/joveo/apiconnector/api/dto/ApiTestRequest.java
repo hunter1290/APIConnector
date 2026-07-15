@@ -1,5 +1,6 @@
 package com.joveo.apiconnector.api.dto;
 
+import com.joveo.apiconnector.ai.AiProvider;
 import com.joveo.apiconnector.api.AuthType;
 import com.joveo.apiconnector.api.DataFormat;
 import com.joveo.apiconnector.api.HttpMethod;
@@ -16,5 +17,9 @@ public record ApiTestRequest(
         /** JSON blob of credentials/config; used only for this call, never persisted. */
         String authConfig,
         /** JSON blob of default headers/query params. */
-        String headers) {
+        String headers,
+        /** Raw request body to send (ignored for GET); e.g. a sample JSON payload to test with. */
+        String body,
+        /** Platform AI provider to analyze the response with, if the call succeeds. Pro plan only. */
+        AiProvider aiProvider) {
 }

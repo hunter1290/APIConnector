@@ -26,8 +26,8 @@ public class ApiTestController {
 
     /** Ad-hoc test of a not-yet-saved upstream configuration. */
     @PostMapping("/test")
-    public ApiTestResponse test(@Valid @RequestBody ApiTestRequest request) {
-        return apiTestService.test(request);
+    public ApiTestResponse test(@AuthenticationPrincipal User user, @Valid @RequestBody ApiTestRequest request) {
+        return apiTestService.test(user, request);
     }
 
     /** Tests an already-saved API using its persisted config (credentials never leave the server). */

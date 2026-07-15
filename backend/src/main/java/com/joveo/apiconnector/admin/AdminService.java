@@ -52,6 +52,18 @@ public class AdminService {
         return toSummary(account);
     }
 
+    /** Enables or disables a normal (USER) account's login access. Admins can't be targeted. */
+    public AccountSummaryResponse setEnabled(Long accountId, boolean enabled) {
+        User account = userRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account", accountId));
+        if (account.getRole() != Role.USER) {
+            throw new IllegalArgumentException("Admin accounts can't be disabled");
+        }
+        account.setEnabled(enabled);
+        userRepository.save(account);
+        return toSummary(account);
+    }
+
     /** Every normal (USER) account with its token position and resource counts. */
     @Transactional(readOnly = true)
     public List<AccountSummaryResponse> listAccounts() {
@@ -107,6 +119,7 @@ public class AdminService {
                 user.getEmail(),
                 user.getFullName(),
                 user.getPlan() != null ? user.getPlan().name() : null,
+                user.isEnabled(),
                 workspaceRepository.countByUserId(user.getId()),
                 apiDetailRepository.countByUserId(user.getId()),
                 allotment,

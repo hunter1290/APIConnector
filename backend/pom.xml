@@ -31,6 +31,9 @@
 		<!-- Override Spring Boot's managed Lombok (1.18.36) with a build that
 		     supports newer JDKs (e.g. JDK 25). See SETUP.md. -->
 		<lombok.version>1.18.46</lombok.version>
+		<!-- Override Spring Boot's managed Mockito (5.14.2): its bundled ByteBuddy can't
+		     instrument classes on JDK 25 ("Could not modify all classes"). See SETUP.md. -->
+		<mockito.version>5.20.0</mockito.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -105,6 +108,16 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Mockito's ByteBuddy only officially supports up to Java 24; this flag is
+					     ByteBuddy's documented escape hatch for newer JDKs (e.g. JDK 25) until an
+					     official release adds support. See SETUP.md. -->
+					<argLine>-Dnet.bytebuddy.experimental=true</argLine>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

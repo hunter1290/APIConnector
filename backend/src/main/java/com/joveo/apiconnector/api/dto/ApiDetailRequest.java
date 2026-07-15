@@ -1,5 +1,6 @@
 package com.joveo.apiconnector.api.dto;
 
+import com.joveo.apiconnector.ai.AiProvider;
 import com.joveo.apiconnector.api.AuthType;
 import com.joveo.apiconnector.api.ConnectionStatus;
 import com.joveo.apiconnector.api.DataFormat;
@@ -23,5 +24,7 @@ public record ApiDetailRequest(
         /** JSON blob of default headers/query params. */
         String headers,
         @NotNull ResponseMode responseMode,
-        ConnectionStatus status) {
+        ConnectionStatus status,
+        /** Platform AI provider to use when responseMode is AI_INSIGHT (optional; Pro plan only). */
+        AiProvider aiProvider) {
 }

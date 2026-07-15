@@ -60,6 +60,15 @@ public class User implements UserDetails {
     @Column(length = 20)
     private UserPlan plan;
 
+    /**
+     * Admin-controlled login gate. False blocks future logins (checked by Spring Security's
+     * DaoAuthenticationProvider via {@link #isEnabled()}) — but an already-issued JWT remains
+     * valid until it expires, since {@code JwtAuthenticationFilter} only checks signature/expiry.
+     */
+    @Column(nullable = false, columnDefinition = "boolean not null default true")
+    @Builder.Default
+    private boolean enabled = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -108,6 +117,6 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return enabled;
     }
 }

@@ -1,5 +1,6 @@
 package com.joveo.apiconnector.api;
 
+import com.joveo.apiconnector.ai.AiProvider;
 import com.joveo.apiconnector.user.User;
 import com.joveo.apiconnector.workspace.Workspace;
 import jakarta.persistence.Column;
@@ -102,6 +103,15 @@ public class ApiDetail {
     /** Generated uniform, client-facing path (e.g. /v1/{workspace}/{api}). */
     @Column(name = "uniform_path", length = 512)
     private String uniformPath;
+
+    /**
+     * Platform AI provider used to analyze this API's responses when
+     * {@code responseMode == AI_INSIGHT}. Pro plan only — APIConnector supplies the actual
+     * credentials (AI_analysis/.env), so there's nothing else to store here.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_provider", length = 20)
+    private AiProvider aiProvider;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

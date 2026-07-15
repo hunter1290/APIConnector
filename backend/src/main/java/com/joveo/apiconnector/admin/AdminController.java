@@ -4,6 +4,7 @@ import com.joveo.apiconnector.admin.dto.AccountSummaryResponse;
 import com.joveo.apiconnector.admin.dto.AdminWorkspaceResponse;
 import com.joveo.apiconnector.admin.dto.ChangePlanRequest;
 import com.joveo.apiconnector.admin.dto.PlatformUsageResponse;
+import com.joveo.apiconnector.admin.dto.SetEnabledRequest;
 import com.joveo.apiconnector.usage.dto.AccountUsageResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -60,5 +61,11 @@ public class AdminController {
     @PatchMapping("/accounts/{id}/plan")
     public AccountSummaryResponse changePlan(@PathVariable Long id, @Valid @RequestBody ChangePlanRequest request) {
         return adminService.changePlan(id, request.plan());
+    }
+
+    /** Enables or disables a normal account's login access. Only an admin can call this. */
+    @PatchMapping("/accounts/{id}/enabled")
+    public AccountSummaryResponse setEnabled(@PathVariable Long id, @Valid @RequestBody SetEnabledRequest request) {
+        return adminService.setEnabled(id, request.enabled());
     }
 }

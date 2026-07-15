@@ -17,6 +17,7 @@ public record ApiDetailResponse(
         String responseMode,
         String status,
         String uniformPath,
+        String aiProvider,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -34,6 +35,7 @@ public record ApiDetailResponse(
                 a.getResponseMode().name(),
                 a.getStatus().name(),
                 a.getUniformPath(),
+                a.getAiProvider() != null ? a.getAiProvider().name() : null,
                 a.getCreatedAt(),
                 a.getUpdatedAt());
     }

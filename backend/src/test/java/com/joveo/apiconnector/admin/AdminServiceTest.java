@@ -132,4 +132,41 @@ class AdminServiceTest {
         assertThatThrownBy(() -> service().changePlan(2L, UserPlan.PRO))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("setEnabled disables a normal account and persists it")
+    void setEnabledDisablesAccount() {
+        User regular = account(1L, UserPlan.REGULAR);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(regular));
+        when(usageService.tokensUsedByAccount(1L)).thenReturn(0L);
+        when(workspaceRepository.countByUserId(1L)).thenReturn(0L);
+        when(apiDetailRepository.countByUserId(1L)).thenReturn(0L);
+
+        AccountSummaryResponse result = service().setEnabled(1L, false);
+
+        assertThat(result.enabled()).isFalse();
+        assertThat(regular.isEnabled()).isFalse();
+        verify(userRepository).save(regular);
+    }
+
+    @Test
+    @DisplayName("setEnabled throws when the account id is unknown")
+    void setEnabledNotFound() {
+        when(userRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().setEnabled(404L, false))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("setEnabled rejects targeting an ADMIN account")
+    void setEnabledRejectsAdminTarget() {
+        User admin = User.builder()
+                .id(2L).email("admin@example.com").password("x").fullName("Admin")
+                .role(Role.ADMIN).plan(null).build();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(admin));
+
+        assertThatThrownBy(() -> service().setEnabled(2L, false))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }
