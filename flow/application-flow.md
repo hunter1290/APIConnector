@@ -16,7 +16,8 @@ How the product fits together, from sign-up to serving a client request.
 2. Register an upstream API     → validate it live first (test-before-security wizard,
                                    see below), then api_details row (base_url, format,
                                    auth_type, ...)
-3. Define a transformer         → transformers row (source→target format, mapping config)
+3. Define a transformer         → transformers row (source→target format, **JSONata expression**
+                                   in `config` — test it live against pasted sample data first)
 4. Publish a uniform endpoint   → unified_endpoints row (url_path, links api + transformer)
 5. Client calls the uniform URL → APIConnector fetches upstream, transforms, returns JSON
 6. Observe & analyze            → tracing (planned); AI insights are real today, on demand,
@@ -27,7 +28,7 @@ How the product fits together, from sign-up to serving a client request.
 | Capability                     | Where it lives                                              |
 |--------------------------------|-------------------------------------------------------------|
 | 1. One uniform API URL         | `unified_endpoints.url_path` (stable, per-client path)      |
-| 2. Format normalization        | `transformers.source_format → target_format` + `config`     |
+| 2. Format normalization        | `transformers.config` — a **real, executed JSONata expression** (`transformer/JsonataTransformService`), not just stored config — see `data-flow.md` |
 | 3. Security translation        | `api_details.auth_type` + `auth_config` → client's scheme   |
 | 3a. Live validation             | `api/ApiTestService` — real test call before/after saving (see `data-flow.md`) |
 | 4. Observability & tracing     | request pipeline (see `data-flow.md`); log table planned    |
@@ -50,8 +51,12 @@ How the product fits together, from sign-up to serving a client request.
     credentials with an optional authenticated retest, (3) **response mode** (Direct / Webhook
     / AI) — if AI, pick a platform provider (**Pro plan only** — upsell shown otherwise) — + save
   - `/dashboard/explorer` — Swagger-style view of generated uniform URLs; "Try it" makes a
-    **real** backend test call, records **real** token usage, and shows AI insights when a
-    provider is attached
+    **real** backend test call, records **real** token usage, shows AI insights when a
+    provider is attached, and shows a **"Unified format"** block with the real JSONata-
+    transformed response when a transformer is attached (JSON sources only for now)
+  - `/dashboard/transformers` — list transformers attached to APIs in the active workspace;
+    add one by picking an API, writing a **JSONata expression**, and testing it live against
+    pasted sample JSON before saving
   - `/dashboard/ai-providers` — read-only view of the platform's fixed AI-provider catalog
     (APIConnector supplies the credentials); shows a Request-Pro upsell for non-Pro accounts
   - `/dashboard/analytics` — operational charts: pull/sync times, sync frequency, data volume,
@@ -73,6 +78,9 @@ How the product fits together, from sign-up to serving a client request.
 > `/api/usage/me`; the Explorer's "Try it" and the Add-API wizard's test steps hit the real
 > `/api/apis/test` and `/api/apis/{id}/test` (now with real AI insights when a provider is
 > attached); plan changes are admin-only, either directly or via Request-Pro approval; account
-> enable/disable is admin-only. Still mock/local: analytics charts. Still planned: the runtime
-> resolve/cache pipeline behind a published uniform URL (see `data-flow.md`), automatic recovery
-> when an upstream is down, and persisting AI insights for later review.
+> enable/disable is admin-only. **Transformers now execute for real** via JSONata
+> (`/api/transformers`, `/dashboard/transformers`) — attached to a JSON-source API, they run
+> automatically on the Explorer's "Try it". Still mock/local: analytics charts. Still planned:
+> the runtime resolve/cache pipeline behind a published uniform URL (see `data-flow.md`),
+> auto-transform for non-JSON sources, automatic recovery when an upstream is down, and
+> persisting AI insights for later review.

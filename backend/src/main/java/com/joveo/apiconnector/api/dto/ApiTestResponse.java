@@ -8,7 +8,9 @@ import com.joveo.apiconnector.ai.dto.AiInsightsResponse;
  * 2xx. Only connection-level failures (DNS, timeout, refused, blocked host) are
  * {@code success = false}. {@code insights} is populated only when an AI provider was
  * supplied and analysis succeeded; a missing/unreachable AI service leaves it {@code null}
- * rather than failing the whole test.
+ * rather than failing the whole test. {@code transformedBody} is the JSON-stringified result
+ * of applying the API's attached transformer (JSON sources only, see {@code transformError}
+ * for why it might be missing) — neither ever fails the underlying connectivity test.
  */
 public record ApiTestResponse(
         boolean success,
@@ -16,5 +18,7 @@ public record ApiTestResponse(
         long latencyMs,
         String responseBody,
         String errorMessage,
-        AiInsightsResponse insights) {
+        AiInsightsResponse insights,
+        String transformedBody,
+        String transformError) {
 }

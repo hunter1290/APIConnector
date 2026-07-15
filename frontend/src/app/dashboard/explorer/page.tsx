@@ -163,6 +163,21 @@ function Operation({ api }: { api: ThirdPartyApi }) {
                   )}
                 </div>
               )}
+              {result.transformedBody && (
+                <div className="mt-3">
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Unified format (transformed)
+                  </h4>
+                  <pre className="overflow-x-auto rounded-lg bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-200">
+                    {result.transformedBody}
+                  </pre>
+                </div>
+              )}
+              {result.transformError && (
+                <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  {result.transformError}
+                </p>
+              )}
             </div>
           )}
         </div>

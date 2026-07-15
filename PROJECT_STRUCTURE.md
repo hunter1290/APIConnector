@@ -59,7 +59,7 @@ Organized **package-by-feature** (`auth`, `user`) with cross-cutting concerns in
 
 | Path                    | Purpose                                                                 |
 |-------------------------|-------------------------------------------------------------------------|
-| `pom.xml`               | Maven build: dependencies, Spring Boot parent (3.4.1), plugins. Lombok pinned to 1.18.46 for JDK 25 support. Mockito pinned to 5.20.0 + Surefire `argLine=-Dnet.bytebuddy.experimental=true` — Spring Boot's managed Mockito's ByteBuddy officially supports only up to Java 24; this combination fixes mocking on JDK 25 (see SETUP.md). Includes `springdoc-openapi-starter-webmvc-ui` for a real, generated Swagger UI. |
+| `pom.xml`               | Maven build: dependencies, Spring Boot parent (3.4.1), plugins. Lombok pinned to 1.18.46 for JDK 25 support. Mockito pinned to 5.20.0 + Surefire `argLine=-Dnet.bytebuddy.experimental=true` — Spring Boot's managed Mockito's ByteBuddy officially supports only up to Java 24; this combination fixes mocking on JDK 25 (see SETUP.md). Includes `springdoc-openapi-starter-webmvc-ui` for a real, generated Swagger UI, and `com.dashjoin:jsonata` for transformer execution. |
 | `mvnw`, `mvnw.cmd`      | Maven Wrapper — runs Maven without a system install.                    |
 | `docker-compose.yml`    | Local PostgreSQL 16 container (db/user/pass = `apiconnector`).          |
 | `HELP.md`               | Spring Initializr-generated reference links.                            |
@@ -145,15 +145,20 @@ live only in `AI_analysis/.env` (see `flow/ai-analysis-flow.md`).
 | `WorkspaceController.java`  | REST `/api/workspaces` (list/create/get/update/delete).                      |
 | `dto/WorkspaceRequest.java`, `dto/WorkspaceResponse.java` | Request/response DTOs (response includes `apiCount`). |
 
-#### `transformer/` — data normalization config
+#### `transformer/` — data normalization config, executed via JSONata
 
 | Path                        | Purpose                                                                       |
 |-----------------------------|-------------------------------------------------------------------------------|
-| `Transformer.java`          | JPA entity `transformers`: source→target format + JSON mapping `config` that normalizes an upstream into the uniform schema. FK → api_detail (nullable = global). |
-| `TransformerRepository.java`| Repo: by api_detail / owning user, `deleteByApiDetailId`.                      |
-| `TransformerService.java`   | CRUD scoped to user (via their APIs).                                          |
-| `TransformerController.java`| REST `/api/transformers` (list/create/get/update/delete).                     |
+| `Transformer.java`          | JPA entity `transformers`: source→target format + `config`, a **JSONata expression** (https://jsonata.org) that normalizes an upstream's parsed JSON into the uniform schema. FK → api_detail (nullable = global). |
+| `TransformerRepository.java`| Repo: by api_detail / owning user, `findByApiDetailId`, `deleteByApiDetailId`.  |
+| `TransformerService.java`   | CRUD scoped to user (via their APIs); `testAdHoc`/`testSaved` delegate to `JsonataTransformService`. |
+| `TransformerController.java`| REST `/api/transformers` (list/create/get/update/delete) + `POST /test` (ad-hoc) + `POST /{id}/test` (saved). |
+| `JsonataTransformService.java` | Compiles and evaluates a JSONata expression (`com.dashjoin:jsonata`) against a parsed data structure; wraps failures in `TransformExecutionException`. |
+| `TransformExecutionException.java` | Thrown for a malformed expression or evaluation failure — caught at every call site, never a 500. |
 | `dto/TransformerRequest.java`, `dto/TransformerResponse.java` | Request/response DTOs.                     |
+| `dto/TransformerTestRequest.java` | Ad-hoc test payload: `{config, sampleData}`.                              |
+| `dto/TransformerSampleRequest.java` | Saved-transformer test payload: `{sampleData}` only (config comes from the saved row). |
+| `dto/TransformerTestResponse.java` | `{success, result, errorMessage}`.                                        |
 
 #### `endpoint/` — published uniform URLs
 
@@ -301,7 +306,8 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 | `dashboard/page.tsx`     | Overview (workspace-level): KPI tiles, token meter, recent connections, AI insights. Shows `NoWorkspace` if none. |
 | `dashboard/apis/page.tsx`| Third-party APIs in the active workspace (cards, remove, link to explorer). |
 | `dashboard/apis/new/page.tsx` | **3-step Add-API wizard**: (1) endpoint — with a **"Paste a curl command"** import (`lib/curlParser.ts`) that prefills URL/method/format/headers/body/auth, a **headers** key-value editor, a **request body** editor (key-value builder for JSON/form-urlencoded, or raw text; shown for non-GET, JSON-validated) — + a real "Test connection" call that must return a real HTTP response before continuing; (2) security scheme + credentials with an optional "Retest with credentials" call; (3) response mode + (if AI_INSIGHT) an AI-provider picker — **Pro plan only**, upsell shown otherwise — + save. Renders any returned AI insights inline. |
-| `dashboard/explorer/page.tsx` | Swagger-style view of generated uniform URLs; "Try it" makes a **real** backend test call (`POST /api/apis/{id}/test`), records real token usage (`POST /api/usage`), and renders AI insights when the API has a provider attached. |
+| `dashboard/explorer/page.tsx` | Swagger-style view of generated uniform URLs; "Try it" makes a **real** backend test call (`POST /api/apis/{id}/test`), records real token usage (`POST /api/usage`), renders AI insights when the API has a provider attached, and renders a **"Unified format"** block with the JSONata-transformed response when the API has a transformer attached (or a note if the transform failed). |
+| `dashboard/transformers/page.tsx` | Lists transformers attached to APIs in the active workspace; "Add transformer" form picks an API (source format follows it), a JSONata expression, and pasted sample JSON, with a **real "Test transform"** call (`POST /api/transformers/test`) before saving (`POST /api/transformers`). |
 | `dashboard/analytics/page.tsx` | Analytics (workspace-level): pull/sync times, sync frequency, volume & downtime **charts**, uptime gauge. No add-API here. |
 | `dashboard/account/page.tsx`  | Account (user-level): profile, **free-token** overview (from `/api/usage/me`), a **read-only** plan display, and a **Request Pro** button (hidden once a request is pending) — only an admin can actually change the plan. |
 | `dashboard/admin/page.tsx`    | **Admin-only** (ROLE_ADMIN): a pending-plan-requests queue (approve/reject) and an accounts table with plan change + **enable/disable** toggle. Renders "Not authorized" for non-admins. |
@@ -321,7 +327,7 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 |-------------------------------|-----------------------------------------------------------------------|
 | `ProtectedRoute.tsx`          | Client guard; redirects to `/login` when unauthenticated.             |
 | `SiteHeader.tsx`              | Sticky marketing header with nav + auth-aware Login / Sign Up / Dashboard buttons. |
-| `dashboard/Sidebar.tsx`       | App nav (incl. **AI Providers**) + workspace switcher with **add** + **delete workspace** + Account link; shows an **Admin** link when the caller is ROLE_ADMIN. |
+| `dashboard/Sidebar.tsx`       | App nav (incl. **Transformers**, **AI Providers**) + workspace switcher with **add** + **delete workspace** + Account link; shows an **Admin** link when the caller is ROLE_ADMIN. |
 | `dashboard/Topbar.tsx`        | Active workspace name, compact token meter, user + sign out.          |
 | `dashboard/TokenMeter.tsx`    | Free-token usage bar (full + compact); reads `AccountContext`.        |
 | `dashboard/NoWorkspace.tsx`   | Empty-state + create-workspace form shown on workspace-level pages when none exist. |
@@ -336,7 +342,7 @@ Next.js **App Router** project with a `src/` directory and the `@/*` import alia
 | `authApi.ts`    | Auth API calls (`register`, `login`, `getCurrentUser`) built on `api.ts`.           |
 | `format.ts`     | Locale-independent `formatNumber` (avoids SSR hydration mismatches from `toLocaleString`). |
 | `curlParser.ts` | `parseCurl(text)` — best-effort curl-command parser (method/URL/headers/body/basic-auth) used by the Add-API wizard's "Paste a curl command" import. Not a full shell parser. |
-| `connectorApi.ts` | Typed calls to `/api/workspaces`, `/api/apis` (incl. `/test` and `/{id}/test`, now with `body`/`aiProvider`), `/api/usage` (`getMyUsage`/`recordUsage`), `/api/ai-providers` (`listAiProviderCatalog` — read-only — + `analyzeWithProvider`), `/api/plan-requests` (+ admin queue/approve/reject), and `/api/admin/accounts` (list + `changeAccountPlan` + `setAccountEnabled`). |
+| `connectorApi.ts` | Typed calls to `/api/workspaces`, `/api/apis` (incl. `/test` and `/{id}/test`, now with `body`/`aiProvider`, and `ApiTestResult` carrying `transformedBody`/`transformError`), `/api/usage` (`getMyUsage`/`recordUsage`), `/api/ai-providers` (`listAiProviderCatalog` — read-only — + `analyzeWithProvider`), `/api/transformers` (`listTransformers`/`createTransformer`/`deleteTransformer`/`testTransformer`/`testSavedTransformer`), `/api/plan-requests` (+ admin queue/approve/reject), and `/api/admin/accounts` (list + `changeAccountPlan` + `setAccountEnabled`). |
 
 ### `src/types/`
 
@@ -379,7 +385,7 @@ Full detail in [context/domain-model.md](context/domain-model.md).
 | `users`                  | `user/User`               | Accounts. `role` (USER/ADMIN), `plan` (REGULAR/PRO), and admin-controlled `enabled`. |
 | `workspaces`             | `workspace/Workspace`     | Per-user grouping of APIs (FK → users).         |
 | `api_details`            | `api/ApiDetail`           | Registered upstream APIs (FK → users, workspaces). Has `response_mode`, generated `uniform_path`, optional `ai_provider` (enum: which platform AI provider analyzes it — Pro plan only). |
-| `transformers`           | `transformer/Transformer` | Normalization config → uniform schema.      |
+| `transformers`           | `transformer/Transformer` | Normalization config: a JSONata expression executed against an upstream's JSON response → uniform schema. |
 | `unified_endpoints`      | `endpoint/UnifiedEndpoint` | Uniform client-facing URL + cached data.   |
 | `token_usage`            | `usage/TokenUsage`        | Append-only AI-token consumption events (FK → users; optional workspace/api). |
 | `plan_upgrade_requests`  | `planrequest/PlanUpgradeRequest` | Request-Pro history: status + who resolved it and when (FK → users). |
@@ -403,9 +409,11 @@ column lying around; `ddl-auto=update` never drops tables/columns, so they're ju
 | GET/POST | `/api/apis`            | Bearer | List (optionally `?workspaceId=`) / create third-party APIs. |
 | GET/PUT/DELETE | `/api/apis/{id}` | Bearer | Get / update / delete an API.              |
 | POST   | `/api/apis/test`         | Bearer | Live test of an ad-hoc (not-yet-saved) upstream config; accepts `body` (non-GET) and `aiProvider` (Pro plan only — 400 otherwise). Credentials are transient. |
-| POST   | `/api/apis/{id}/test`    | Bearer | Live test of a saved API using its persisted config (incl. its AI provider); credentials never leave the server. |
+| POST   | `/api/apis/{id}/test`    | Bearer | Live test of a saved API using its persisted config (incl. its AI provider); if a transformer is attached and the API's `requestFormat` is JSON, the response is also run through it — result in `transformedBody`, or `transformError` if the saved response didn't fit the expression. Credentials never leave the server. |
 | GET/POST | `/api/transformers`   | Bearer | List / create transformer objects.         |
 | GET/PUT/DELETE | `/api/transformers/{id}` | Bearer | Get / update / delete a transformer. |
+| POST   | `/api/transformers/test` | Bearer | Ad-hoc: run a JSONata expression (`config`) against pasted `sampleData` without saving anything — used by the Transformers page's "Test transform" button. |
+| POST   | `/api/transformers/{id}/test` | Bearer | Run a saved transformer's own expression against pasted `sampleData`. |
 | GET    | `/api/usage/me`          | Bearer | Caller's AI-token position (allotment/used/remaining + per-workspace). |
 | POST   | `/api/usage`             | Bearer | Record an AI-token consumption event.       |
 | GET    | `/api/ai-providers`    | Bearer | The platform's fixed AI-provider catalog (`{provider, label}[]`) — visible to everyone. |

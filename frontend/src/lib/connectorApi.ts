@@ -108,6 +108,10 @@ export interface ApiTestResult {
   responseBody: string | null;
   errorMessage: string | null;
   insights: AiInsights | null;
+  /** The JSON-stringified result of applying this API's attached transformer, if any. */
+  transformedBody: string | null;
+  /** Why transformedBody is missing even though a transformer is attached (e.g. non-JSON source, bad expression). */
+  transformError: string | null;
 }
 
 /** Ad-hoc test of a not-yet-saved upstream configuration. Credentials are transient. */
@@ -245,4 +249,63 @@ export function approvePlanRequest(id: number) {
 
 export function rejectPlanRequest(id: number) {
   return apiFetch<PlanUpgradeRequestDto>(`/api/admin/plan-requests/${id}/reject`, { method: "POST" });
+}
+
+/* ------------------------------- transformers ------------------------------ */
+// A transformer's `config` is a JSONata (https://jsonata.org) expression evaluated against an
+// API's parsed JSON response to produce the unified-format output.
+
+export interface TransformerDto {
+  id: number;
+  apiDetailId: number | null;
+  name: string;
+  description: string | null;
+  sourceFormat: string;
+  targetFormat: string;
+  config: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTransformerBody {
+  apiDetailId: number;
+  name: string;
+  description?: string | null;
+  sourceFormat: string;
+  targetFormat: string;
+  config: string;
+}
+
+export interface TransformerTestResult {
+  success: boolean;
+  result: unknown;
+  errorMessage: string | null;
+}
+
+export function listTransformers() {
+  return apiFetch<TransformerDto[]>("/api/transformers");
+}
+
+export function createTransformer(body: CreateTransformerBody) {
+  return apiFetch<TransformerDto>("/api/transformers", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function deleteTransformer(id: number) {
+  return apiFetch<void>(`/api/transformers/${id}`, { method: "DELETE" });
+}
+
+/** Ad-hoc: try a JSONata expression against pasted sample data before saving it. */
+export function testTransformer(config: string, sampleData: unknown) {
+  return apiFetch<TransformerTestResult>("/api/transformers/test", {
+    method: "POST",
+    body: JSON.stringify({ config, sampleData }),
+  });
+}
+
+/** Try a saved transformer's expression against pasted sample data. */
+export function testSavedTransformer(id: number, sampleData: unknown) {
+  return apiFetch<TransformerTestResult>(`/api/transformers/${id}/test`, {
+    method: "POST",
+    body: JSON.stringify({ sampleData }),
+  });
 }

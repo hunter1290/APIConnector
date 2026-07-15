@@ -47,8 +47,10 @@ cd ../frontend && npm install && npm run dev
 | CRUD   | `/api/workspaces`            | Bearer | Manage the caller's workspaces.                 |
 | CRUD   | `/api/apis`                  | Bearer | Manage the caller's upstream APIs.              |
 | POST   | `/api/apis/test`             | Bearer | Live test of an ad-hoc (not-yet-saved) upstream config — accepts a request body (non-GET) and an AI provider to analyze the result. |
-| POST   | `/api/apis/{id}/test`        | Bearer | Live test of a saved API using its persisted config (credentials stay server-side). |
-| CRUD   | `/api/transformers`          | Bearer | Manage transformers.                            |
+| POST   | `/api/apis/{id}/test`        | Bearer | Live test of a saved API using its persisted config (credentials stay server-side); auto-applies an attached transformer for JSON sources. |
+| CRUD   | `/api/transformers`          | Bearer | Manage transformers — `config` is a **JSONata** expression. |
+| POST   | `/api/transformers/test`     | Bearer | Test a JSONata expression against pasted sample data, without saving. |
+| POST   | `/api/transformers/{id}/test` | Bearer | Test a saved transformer's expression against pasted sample data. |
 | GET    | `/api/usage/me`              | Bearer | Caller's AI-token position (allotment/used/remaining + per-workspace). |
 | POST   | `/api/usage`                 | Bearer | Record an AI-token consumption event.           |
 | GET    | `/api/ai-providers`  | Bearer | The platform's fixed AI-provider catalog (visible to everyone; using one is Pro-only). |
@@ -102,7 +104,7 @@ APIConnector/
 │       ├── api/           Upstream API registrations (CRUD) + live test-call capability
 │       ├── ai/            Fixed AI-provider catalog + Pro-plan gate + AI_analysis client
 │       ├── workspace/     Workspaces (CRUD)
-│       ├── transformer/   Response transformers (CRUD)
+│       ├── transformer/   Response transformers — real JSONata execution (CRUD + test)
 │       ├── endpoint/      Uniform endpoint model
 │       ├── usage/         AI-token usage tracking (record + per-account/workspace)
 │       ├── admin/         Admin monitoring API + account plan/enabled controls + seeded admin

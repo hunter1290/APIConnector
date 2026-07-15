@@ -2,6 +2,9 @@ package com.joveo.apiconnector.transformer;
 
 import com.joveo.apiconnector.transformer.dto.TransformerRequest;
 import com.joveo.apiconnector.transformer.dto.TransformerResponse;
+import com.joveo.apiconnector.transformer.dto.TransformerSampleRequest;
+import com.joveo.apiconnector.transformer.dto.TransformerTestRequest;
+import com.joveo.apiconnector.transformer.dto.TransformerTestResponse;
 import com.joveo.apiconnector.user.User;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -57,5 +60,19 @@ public class TransformerController {
     public ResponseEntity<Void> delete(@AuthenticationPrincipal User user, @PathVariable Long id) {
         transformerService.delete(user, id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Ad-hoc: try a JSONata expression against pasted sample data before saving it. */
+    @PostMapping("/test")
+    public TransformerTestResponse test(@Valid @RequestBody TransformerTestRequest request) {
+        return transformerService.testAdHoc(request.config(), request.sampleData());
+    }
+
+    /** Try a saved transformer's expression against pasted sample data. */
+    @PostMapping("/{id}/test")
+    public TransformerTestResponse testSaved(@AuthenticationPrincipal User user,
+                                             @PathVariable Long id,
+                                             @Valid @RequestBody TransformerSampleRequest request) {
+        return transformerService.testSaved(user, id, request.sampleData());
     }
 }

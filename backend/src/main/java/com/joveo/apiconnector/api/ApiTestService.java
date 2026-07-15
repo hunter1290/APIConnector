@@ -1,5 +1,7 @@
 package com.joveo.apiconnector.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.joveo.apiconnector.ai.AiAccessGuard;
 import com.joveo.apiconnector.ai.AiAnalysisClient;
 import com.joveo.apiconnector.ai.AiProvider;
@@ -7,11 +9,16 @@ import com.joveo.apiconnector.ai.dto.AiInsightsResponse;
 import com.joveo.apiconnector.api.dto.ApiTestRequest;
 import com.joveo.apiconnector.api.dto.ApiTestResponse;
 import com.joveo.apiconnector.common.exception.ResourceNotFoundException;
+import com.joveo.apiconnector.transformer.JsonataTransformService;
+import com.joveo.apiconnector.transformer.Transformer;
+import com.joveo.apiconnector.transformer.TransformExecutionException;
+import com.joveo.apiconnector.transformer.TransformerRepository;
 import com.joveo.apiconnector.user.User;
 import com.joveo.apiconnector.user.UserPlan;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -26,7 +33,9 @@ import org.springframework.web.client.RestTemplate;
  * Executes a live, synchronous test call against a user-supplied or saved upstream API, so a
  * connection can be validated before (or independent of) saving it. Not part of the runtime
  * resolve/cache pipeline (see flow/data-flow.md) — purely for validation. Optionally analyzes
- * a successful response with a platform AI provider (Pro plan only; see flow/ai-analysis-flow.md).
+ * a successful response with a platform AI provider (Pro plan only; see flow/ai-analysis-flow.md)
+ * and, for a saved API with an attached transformer, applies its JSONata expression to produce
+ * the unified-format output (JSON source responses only; see flow/data-flow.md).
  */
 @Service
 public class ApiTestService {
@@ -38,6 +47,9 @@ public class ApiTestService {
     private final ApiDetailRepository apiDetailRepository;
     private final AiAccessGuard aiAccessGuard;
     private final AiAnalysisClient aiAnalysisClient;
+    private final TransformerRepository transformerRepository;
+    private final JsonataTransformService jsonataTransformService;
+    private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
     public ApiTestService(SsrfGuard ssrfGuard,
@@ -45,12 +57,18 @@ public class ApiTestService {
                           ApiDetailRepository apiDetailRepository,
                           AiAccessGuard aiAccessGuard,
                           AiAnalysisClient aiAnalysisClient,
+                          TransformerRepository transformerRepository,
+                          JsonataTransformService jsonataTransformService,
+                          ObjectMapper objectMapper,
                           RestTemplateBuilder restTemplateBuilder) {
         this.ssrfGuard = ssrfGuard;
         this.headerBuilder = headerBuilder;
         this.apiDetailRepository = apiDetailRepository;
         this.aiAccessGuard = aiAccessGuard;
         this.aiAnalysisClient = aiAnalysisClient;
+        this.transformerRepository = transformerRepository;
+        this.jsonataTransformService = jsonataTransformService;
+        this.objectMapper = objectMapper;
         this.restTemplate = restTemplateBuilder
                 .connectTimeout(Duration.ofSeconds(5))
                 .readTimeout(Duration.ofSeconds(10))
@@ -75,8 +93,43 @@ public class ApiTestService {
         AiProvider aiProvider = api.getAiProvider() != null && user.getPlan() == UserPlan.PRO
                 ? api.getAiProvider()
                 : null;
-        return execute(api.getBaseUrl(), api.getHttpMethod(), api.getAuthType(), api.getAuthConfig(),
-                null, aiProvider);
+        ApiTestResponse response = execute(api.getBaseUrl(), api.getHttpMethod(), api.getAuthType(),
+                api.getAuthConfig(), null, aiProvider);
+        return applyTransformerIfAny(response, api);
+    }
+
+    /**
+     * If this API has an attached transformer, applies its JSONata expression to a successful
+     * JSON response and folds the unified output in — never turns a successful connectivity
+     * test into a failure, even if the transform itself fails.
+     */
+    private ApiTestResponse applyTransformerIfAny(ApiTestResponse response, ApiDetail api) {
+        if (!response.success() || response.responseBody() == null) {
+            return response;
+        }
+        Optional<Transformer> transformer = transformerRepository.findByApiDetailId(api.getId());
+        if (transformer.isEmpty()) {
+            return response;
+        }
+        if (api.getRequestFormat() != DataFormat.JSON) {
+            return withTransform(response, null,
+                    "This API's transformer wasn't applied: transformers currently support JSON source responses only.");
+        }
+        try {
+            Object parsed = objectMapper.readValue(response.responseBody(), Object.class);
+            Object transformed = jsonataTransformService.apply(transformer.get().getConfig(), parsed);
+            return withTransform(response, objectMapper.writeValueAsString(transformed), null);
+        } catch (TransformExecutionException e) {
+            return withTransform(response, null, e.getMessage());
+        } catch (JsonProcessingException e) {
+            return withTransform(response, null,
+                    "Could not parse the response as JSON to transform it: " + e.getMessage());
+        }
+    }
+
+    private ApiTestResponse withTransform(ApiTestResponse r, String transformedBody, String transformError) {
+        return new ApiTestResponse(r.success(), r.httpStatus(), r.latencyMs(), r.responseBody(), r.errorMessage(),
+                r.insights(), transformedBody, transformError);
     }
 
     private ApiTestResponse execute(String baseUrl, HttpMethod httpMethod, AuthType authType, String authConfig,
@@ -127,11 +180,11 @@ public class ApiTestService {
         AiInsightsResponse insights = aiProvider != null && capped != null
                 ? aiAnalysisClient.analyze(aiProvider, null, capped)
                 : null;
-        return new ApiTestResponse(true, status, latencyMs, capped, null, insights);
+        return new ApiTestResponse(true, status, latencyMs, capped, null, insights, null, null);
     }
 
     private ApiTestResponse failure(String message) {
-        return new ApiTestResponse(false, null, 0, null, message, null);
+        return new ApiTestResponse(false, null, 0, null, message, null, null, null);
     }
 
     private String cap(String body) {

@@ -73,12 +73,30 @@ If a successful test carries an `aiProvider` (and the caller is Pro), `ApiTestSe
 calls `AiAnalysisClient` and folds a real, structured analysis into the response's `insights`
 field — see `ai-analysis-flow.md` for the full platform-AI-provider flow.
 
+## Format normalization (step 4) — now real, scoped to a single-call slice
+`POST /api/apis/{id}/test` also performs a real slice of **step 4** above: if the ApiDetail
+has a `transformer` attached (`TransformerRepository.findByApiDetailId`) and its
+`request_format` is `JSON`, the raw response body is parsed and run through the transformer's
+`config` — a **JSONata expression** (https://jsonata.org) — via `JsonataTransformService`
+(`com.dashjoin:jsonata`). The result comes back as `transformedBody` on the response; if a
+transformer is attached but the expression fails against this particular response (bad path,
+malformed expression), `transformError` is set instead and the underlying connectivity result
+is untouched — a transform failure never fails the test itself. Non-JSON sources aren't
+auto-transformed yet (surfaced as a note in the Transformers page, not silently skipped).
+
+Authoring/testing an expression against pasted sample data (independent of any live call) goes
+through `POST /api/transformers/test` (ad-hoc) and `POST /api/transformers/{id}/test` (a saved
+transformer's own config) — both delegate to the same `JsonataTransformService`, returning
+`{success, result, errorMessage}` rather than ever 500ing on a bad expression.
+
 ## Current vs. planned
 - **Built:** entities/tables, auth, **CRUD APIs** for workspaces / api_details / transformers
   (user-scoped, JWT-protected — `/api/workspaces`, `/api/apis`, `/api/transformers`),
   uniform-endpoint model, cached payload fields. `uniform_path` is generated on API create.
-  Also built: the live-test capability above (validation + optional real AI analysis, not the
-  runtime pipeline).
-- **Planned:** the executor that performs steps 2–6 as a real, cached, client-facing pipeline
+  Also built: the live-test capability above (validation + optional real AI analysis), and
+  **real JSONata-based format normalization** (previous section) — both as single-call slices,
+  not the cached runtime pipeline.
+- **Planned:** the executor that performs steps 1–6 as a real, cached, client-facing pipeline
   (resolve by `url_path` → translate → call → normalize → cache → observe), retry/recovery
-  when an upstream is down, plus observability tables and persisting AI insights for later review.
+  when an upstream is down, multi-upstream join/merge in a transformer, plus observability
+  tables and persisting AI insights for later review.

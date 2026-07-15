@@ -66,7 +66,10 @@ public class Transformer {
     @Builder.Default
     private DataFormat targetFormat = DataFormat.JSON;
 
-    /** JSON mapping/transformation rules that produce the uniform schema. */
+    /**
+     * A JSONata expression (https://jsonata.org) evaluated against the upstream's parsed JSON
+     * response to produce the uniform-format output — executed by {@link JsonataTransformService}.
+     */
     @Column(name = "config", columnDefinition = "text", nullable = false)
     private String config;
 

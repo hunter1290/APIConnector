@@ -11,13 +11,14 @@
 | AI_analysis | Node.js + TypeScript + Express (`AI_analysis/`). Stateless — no DB. Calls the real Anthropic Messages API / OpenAI Chat Completions API. Internal-only: the backend calls it with a shared secret (`X-Internal-Secret`); never called by the frontend. |
 | Lombok    | Pinned `1.18.46` (JDK 25 compatibility).                          |
 | Mockito   | Pinned `5.20.0` + Surefire `argLine=-Dnet.bytebuddy.experimental=true` (JDK 25 compatibility — see Gotchas). |
+| JSONata   | `com.dashjoin:jsonata` `0.9.8` — executes `transformers.config` expressions server-side (`transformer/JsonataTransformService`). |
 
 ## Backend package layout (`com.joveo.apiconnector`)
 Package-by-feature:
 - `auth` — register/login controller, service, DTOs
 - `user` — User entity (also Spring `UserDetails`), Role, UserPlan, repo, `/me`
 - `api` — ApiDetail entity + enums (AuthType, DataFormat, HttpMethod, ConnectionStatus) + repo; also the live-test capability (`ApiTestService`/`ApiTestController`, `AuthConfigHeaderBuilder`, `SsrfGuard`)
-- `transformer` — Transformer entity + repo
+- `transformer` — Transformer entity + repo; `JsonataTransformService` compiles/evaluates its `config` (a JSONata expression) against parsed JSON via `com.dashjoin:jsonata`; `TransformerService`/`TransformerController` expose ad-hoc + saved test endpoints, wrapping failures in `TransformExecutionException` (never a 500)
 - `endpoint` — UnifiedEndpoint entity + EndpointStatus + repo
 - `usage` — TokenUsage entity + UsageSource + repo, UsageService, `/api/usage` (record + `/me`)
 - `ai` — fixed AI-provider catalog + `AiAccessGuard` (Pro-plan gate) + controller (`/api/ai-providers`: catalog + `/analyze`); `AiAnalysisClient` calls the `AI_analysis` microservice with no API key (AI_analysis holds its own credentials via `.env`)

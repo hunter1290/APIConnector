@@ -70,6 +70,13 @@
 			<version>2.7.0</version>
 		</dependency>
 
+		<!-- JSONata expression engine — executes Transformer.config against upstream responses -->
+		<dependency>
+			<groupId>com.dashjoin</groupId>
+			<artifactId>jsonata</artifactId>
+			<version>0.9.8</version>
+		</dependency>
+
 		<!-- JWT (JSON Web Token) support -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

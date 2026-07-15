@@ -234,7 +234,7 @@ export default function NewApiPage() {
       });
       setStep1Result(result);
     } catch {
-      setStep1Result({ success: false, httpStatus: null, latencyMs: 0, responseBody: null, errorMessage: "Could not reach the backend.", insights: null });
+      setStep1Result({ success: false, httpStatus: null, latencyMs: 0, responseBody: null, errorMessage: "Could not reach the backend.", insights: null, transformedBody: null, transformError: null });
     } finally {
       setTestingStep1(false);
     }
@@ -255,7 +255,7 @@ export default function NewApiPage() {
       });
       setStep2Result(result);
     } catch {
-      setStep2Result({ success: false, httpStatus: null, latencyMs: 0, responseBody: null, errorMessage: "Could not reach the backend.", insights: null });
+      setStep2Result({ success: false, httpStatus: null, latencyMs: 0, responseBody: null, errorMessage: "Could not reach the backend.", insights: null, transformedBody: null, transformError: null });
     } finally {
       setTestingStep2(false);
     }

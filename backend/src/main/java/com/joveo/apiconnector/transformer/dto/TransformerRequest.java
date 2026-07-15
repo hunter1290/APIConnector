@@ -15,6 +15,6 @@ public record TransformerRequest(
         @Size(max = 1000) String description,
         @NotNull DataFormat sourceFormat,
         @NotNull DataFormat targetFormat,
-        /** JSON mapping/transformation rules that produce the uniform schema. */
+        /** A JSONata expression evaluated against the parsed response to produce the uniform schema. */
         @NotBlank String config) {
 }

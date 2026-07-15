@@ -76,9 +76,12 @@ Entity: `api/ApiDetail.java`. Enums: `HttpMethod`, `DataFormat`, `AuthType`, `Re
 | description    | text              |                                             |
 | source_format  | enum (DataFormat) | upstream format in                          |
 | target_format  | enum (DataFormat) | uniform format out (default JSON)           |
-| config         | text (JSON)       | mapping/transform rules                     |
+| config         | text               | a **JSONata expression** (https://jsonata.org), executed server-side against the upstream's parsed JSON response to produce the uniform shape |
 
-Entity: `transformer/Transformer.java`.
+Entity: `transformer/Transformer.java`. Execution: `transformer/JsonataTransformService.java` (via `com.dashjoin:jsonata`),
+invoked from `TransformerService.testAdHoc`/`testSaved` (`/api/transformers/test`, `/api/transformers/{id}/test`) and
+automatically from `ApiTestService.testSaved` when an API with `requestFormat == JSON` has a transformer attached —
+result surfaces on `ApiTestResponse.transformedBody`, or `transformError` if the saved response didn't fit the expression.
 
 ## unified_endpoints  — the uniform client-facing URL + its data ("update url data")
 | Column         | Type              | Notes                                       |
